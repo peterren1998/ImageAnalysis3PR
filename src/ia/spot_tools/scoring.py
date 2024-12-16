@@ -80,13 +80,13 @@ def intensity_score(intensity, ref_intensities, weight=1.,
 # accumulative prob.
 def _cum_prob(data, target_value, vmin=-np.inf, vmax=np.inf):
     """Function to calculate CDF from a dataset"""
-    data = np.array(data, dtype=np.float)
+    data = np.array(data, dtype=np.float32)
     data = data[np.isnan(data)==False]
     if len(data) == 0:
         raise ValueError(f"Wrong input data, no valid points at all.")
-    target_value = np.array(target_value, dtype=np.float)
+    target_value = np.array(target_value, dtype=np.float32)
     if len(target_value.shape) == 0:
-        target_value = np.array([target_value], dtype=np.float)
+        target_value = np.array([target_value], dtype=np.float32)
     target_value[np.isnan(target_value)] = np.inf
     target_shape = np.shape(target_value)
     target_value = target_value.reshape(-1)

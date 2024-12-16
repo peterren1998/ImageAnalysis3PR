@@ -35,7 +35,7 @@ def plot_boundary_probability(region_ids, domain_start_list, figure_kwargs={}, p
         import matplotlib.pyplot as plt
     # summarize
     _x = np.array(region_ids, dtype=np.int)
-    _y = np.zeros(np.shape(_x), dtype=np.float)
+    _y = np.zeros(np.shape(_x), dtype=np.float32)
     for _dm_starts in domain_start_list:
         for _d in _dm_starts:
             if _d > 0 and _d in _x:

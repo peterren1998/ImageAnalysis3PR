@@ -425,8 +425,8 @@ def identify_chromosomes(chrom_im, dapi_im=None,
     if verbose:
         print(f"-- generate seeding image.")
     _chrom_im = chrom_im.copy()
-    _signal_im = np.array(gaussian_filter(_chrom_im, seed_gfilt_size), dtype=np.float)
-    _background_im = np.array(gaussian_filter(_chrom_im, background_gfilt_size), dtype=np.float)
+    _signal_im = np.array(gaussian_filter(_chrom_im, seed_gfilt_size), dtype=np.float32)
+    _background_im = np.array(gaussian_filter(_chrom_im, background_gfilt_size), dtype=np.float32)
     _seed_im = _signal_im - _background_im
     
     # 2. binarize image

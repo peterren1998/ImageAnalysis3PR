@@ -52,3 +52,5 @@ from . import segmentation_tools
 ## import exteral functions
 from .External import Fitting_v4
 #from .External import DomainTools
+
+__version__ = '0.1.0'

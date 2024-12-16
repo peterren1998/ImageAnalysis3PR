@@ -178,7 +178,7 @@ def find_paired_centers(tar_cts, ref_cts, drift=None,
     if drift is None:
         _drift = np.zeros(np.shape(_tar_cts)[1])
     else:
-        _drift = np.array(drift, dtype=np.float)[:_dimension]
+        _drift = np.array(drift, dtype=np.float32)[:_dimension]
     if verbose:
         print(f"-- aligning {len(_tar_cts)} centers to {len(_ref_cts)} ref_centers, given drift:{np.round(_drift,2)}",
               end=', ')
@@ -243,8 +243,8 @@ def check_paired_centers(paired_tar_cts, paired_ref_cts,
         _paired_ref_cts: paired reference centers, 2d numpy arrray of n_spots*dim
         """
     from scipy.spatial import Delaunay
-    _tar_cts = np.array(paired_tar_cts, dtype=np.float)
-    _ref_cts = np.array(paired_ref_cts, dtype=np.float)
+    _tar_cts = np.array(paired_tar_cts, dtype=np.float32)
+    _ref_cts = np.array(paired_ref_cts, dtype=np.float32)
     _shifts = _tar_cts - _ref_cts
     if verbose:
         print(f"-- check {len(_tar_cts)} pairs of centers", end=', ')

@@ -465,7 +465,7 @@ def visualize_chromosome_3d_cloud(_spots, comp_dict, density_dict=None,
     if verbose:
         print(f"-- plotting 2d projection of densities")
     # manually thresholded density for later projection
-    _thres_den = {_k:np.array(_v >= cloud_thres, dtype=np.float) for _k,_v in _den.items()}
+    _thres_den = {_k:np.array(_v >= cloud_thres, dtype=np.float32) for _k,_v in _den.items()}
     # get colors
     cmap_dict = {_k:transparent_gradient(_c) for _k,_c in color_dict.items()}
     # init a trim-edge slice

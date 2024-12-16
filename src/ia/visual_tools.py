@@ -925,7 +925,7 @@ class Reader:
             end = self.number_frames
 
         length = end - start
-        average = np.zeros((self.image_width, self.image_height), np.float)
+        average = np.zeros((self.image_width, self.image_height), np.float32)
         for i in range(length):
             if verbose and ((i%10)==0):
                 print(" processing frame:", i, " of", self.number_frames)
@@ -1154,7 +1154,7 @@ def DAPI_segmentation(ims, names,
                                                     verbose=verbose) for _im in _ims]
 
     # rescale image to 0-1 gray scale
-    _limits = [stats.scoreatpercentile(_im, (cap_percentile, 100.-cap_percentile)).astype(np.float) for _im in _ims]
+    _limits = [stats.scoreatpercentile(_im, (cap_percentile, 100.-cap_percentile)).astype(np.float32) for _im in _ims]
     _norm_ims = [(_im-np.min(_limit))/(np.max(_limit)-np.min(_limit)) for _im,_limit in zip(_ims, _limits)]
     for _im in _norm_ims:
         _im[_im < 0] = 0
@@ -1374,7 +1374,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         _load_pool.terminate()
     ## rescaling and stack
     # rescale image to 0-1 gray scale
-    _limits = [stats.scoreatpercentile(_im, (cap_percentile, 100.-cap_percentile)).astype(np.float) for _im in _ims]
+    _limits = [stats.scoreatpercentile(_im, (cap_percentile, 100.-cap_percentile)).astype(np.float32) for _im in _ims]
     _norm_ims = [(_im-np.min(_limit))/(np.max(_limit)-np.min(_limit)) for _im,_limit in zip(_ims, _limits)]
     for _im in _norm_ims:
         _im[_im < 0] = 0
@@ -1805,7 +1805,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
     _im = im.copy()
     # seeding threshold
     if seed_by_per:
-        _im_ints = _im[np.isnan(_im)==False].astype(np.float)
+        _im_ints = _im[np.isnan(_im)==False].astype(np.float32)
         _th_seed = scoreatpercentile(_im_ints, th_seed_percentile) - \
                     scoreatpercentile(_im_ints, 100-th_seed_percentile)
     else:
@@ -1815,7 +1815,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}")
     # start seeding 
     if center is not None:
-        _center = np.array(center, dtype=np.float)
+        _center = np.array(center, dtype=np.float32)
         _limits = np.zeros([2, 3], dtype=np.int)
         _limits[0, 1:] = np.array([np.max([x, y]) for x, y in zip(
             np.zeros(2), _center[1:]-seed_radius)], dtype=np.int)
@@ -2000,7 +2000,7 @@ def fit_multi_gaussian(im, seeds, width_zxy = [1.5, 2, 2], fit_radius=5,
         # initialize
         ps = []
         sub_ims = []
-        im_subtr = np.array(im,dtype=np.float)
+        im_subtr = np.array(im,dtype=np.float32)
 
         # loop through seeds
         for _seed in _seeds:
@@ -2587,7 +2587,7 @@ def crop_multi_channel_image_v2(filename, channels, crop_limits=None,
         _coords = np.meshgrid( np.arange(crop_limits[0][1]-crop_limits[0][0]), 
                                np.arange(crop_limits[1][1]-crop_limits[1][0]), 
                                np.arange(crop_limits[2][1]-crop_limits[2][0]))
-        _coords = np.stack(_coords).transpose((0, 2, 1, 3)).astype(np.float) # transpose is necessary
+        _coords = np.stack(_coords).transpose((0, 2, 1, 3)).astype(np.float32) # transpose is necessary
         # 2.2 adjust coordinates based on drift_limits and limits
         _coords += _limit_diffs[:,0,np.newaxis,np.newaxis,np.newaxis]
         # 2.3 adjust coordinates based on drift
@@ -2831,7 +2831,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     # rotate old image
     #_rot_old_im = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape, borderMode=cv2.BORDER_DEFAULT) for _lyr in old_dapi_im], dtype=np.uint16)
     # rotate segmentation
-    _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float), 
+    _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
                                              _rot_old_M, old_segmentation.shape, 
                                              flags=cv2.INTER_NEAREST,
                                              borderMode=cv2.BORDER_CONSTANT), dtype=np.int)

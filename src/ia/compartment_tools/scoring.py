@@ -231,7 +231,7 @@ def spot_cloud_scores(spots, ref_spots, comp_dict,
         if len(spot_variance) < 3:
             raise ValueError(f"variance should be given for 3d")
         else:
-            spot_variance=np.array(spot_variance[:3],dtype=np.float).reshape(-1)
+            spot_variance=np.array(spot_variance[:3],dtype=np.float32).reshape(-1)
     # check exclude_dict:
     if not isinstance(exclude_dict, dict):
         raise TypeError(f"Wrong input type for exclude_dict, should be a dict but {type(exclude_dict)} is given.")
@@ -258,7 +258,7 @@ def spot_cloud_scores(spots, ref_spots, comp_dict,
         _inds = np.array(_inds, dtype=np.int)
         # extract coordinates
         _ref_cts = _ref_spots[_inds,1:4]
-        _scores = np.zeros(len(_zxys), dtype=np.float)
+        _scores = np.zeros(len(_zxys), dtype=np.float32)
         
         for _i, _ct in enumerate(_ref_cts):
             if not np.isnan(_ct).any():
@@ -340,7 +340,7 @@ def density_overlaps(d1, d2, method='geometric'):
 
 def calculate_gaussian_density(centers, ref_center, sigma, 
                                intensity=1, background=0):
-    sigma = np.array(sigma, dtype=np.float)
+    sigma = np.array(sigma, dtype=np.float32)
     g_pdf = np.exp(-0.5 * np.sum((centers - ref_center)**2 / sigma**2, axis=-1))
     g_pdf = float(intensity) * g_pdf + float(background)
     return g_pdf
@@ -349,7 +349,7 @@ def calculate_gaussian_density(centers, ref_center, sigma,
 
 
 def winsorize(scores, l_per=5, u_per=5, normalize=False):
-    _scores = np.array(scores, dtype=np.float)
+    _scores = np.array(scores, dtype=np.float32)
     _llim = scoreatpercentile(_scores, l_per)
     _ulim = scoreatpercentile(_scores, 100-u_per)
     _scores[_scores < _llim] = _llim

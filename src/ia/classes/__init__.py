@@ -1710,11 +1710,11 @@ class Cell_List():
                             print(f"+++ filtered out by dist-map shape, fov:{_cell.fov_id}, cell:{_cell.cell_id}, chrom:{_chrom_id}")
                         continue
                     else:
-                        _cand_distmaps.append(_distmap.astype(np.float))
+                        _cand_distmaps.append(_distmap.astype(np.float32))
 
         ## calculate averaged map
         # acquire total map
-        _total_map = np.array(_cand_distmaps, dtype=np.float)
+        _total_map = np.array(_cand_distmaps, dtype=np.float32)
         _region_failure_rate = np.sum(np.sum(np.isnan(_total_map),axis=1) >= \
                                  np.shape(_total_map)[2]-1, axis=0) / len(_total_map)
         # calculate averaged map
@@ -3512,7 +3512,7 @@ class Cell_Data():
             if _gaussian_size:
                 _chrom_im = ndimage.filters.gaussian_filter(_chrom_im, _gaussian_size)
             # normalization
-            _limit = stats.scoreatpercentile(_chrom_im, (_cap_percentile, 100.-_cap_percentile)).astype(np.float)
+            _limit = stats.scoreatpercentile(_chrom_im, (_cap_percentile, 100.-_cap_percentile)).astype(np.float32)
             _chrom_im = (_chrom_im-np.min(_limit))/(np.max(_limit)-np.min(_limit))
             # max filter - min filter
             _max_ft = ndimage.filters.maximum_filter(_chrom_im, _seed_dim)
