@@ -283,7 +283,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
 def Illumination_correction(im, correction_channel, crop_limits=None, 
                             all_channels=_allowed_colors, single_im_size=_image_size, 
                             cropped_profile=None, correction_folder=_correction_folder,
-                            profile_dtype=np.float, image_dtype=np.uint16,
+                            profile_dtype=np.float32, image_dtype=np.uint16,
                             ic_profile_name='illumination_correction', correction_power=1, verbose=True):
     """Function to do fast illumination correction in a RAM-efficient manner
     Inputs:
@@ -369,7 +369,7 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
 def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647', crop_limits=None, 
                                      all_channels=_allowed_colors, single_im_size=_image_size,
                                      drift=np.array([0,0,0]), correction_folder=_correction_folder, 
-                                     profile_dtype=np.float, image_dtype=np.uint16,
+                                     profile_dtype=np.float32, image_dtype=np.uint16,
                                      cc_profile_name='chromatic_correction', verbose=True):
     """Chromatic abbrevation correction for given image and crop
         im: 3d image, np.ndarray or np.memmap
@@ -1502,7 +1502,7 @@ def Bleedthrough_correction(input_im, crop_limits=None, all_channels=_allowed_co
                             normalization=False,
                             z_shift_corr=True, hot_pixel_remove=True,
                             profile_basename='bleedthrough_correction_',
-                            profile_dtype=np.float, image_dtype=np.uint16,
+                            profile_dtype=np.float32, image_dtype=np.uint16,
                             return_limits=False, verbose=True):
     """Bleedthrough correction for a composite image
     Inputs:
