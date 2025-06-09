@@ -25,9 +25,9 @@ from .LibraryTools import OTTable
 import logging
 
 
-def log_message(msg, logger):
+def log_message(msg, logger, level=logging.INFO):
     if logger is not None:
-        logger.info(msg)
+        logger.log(level, msg)
 
 def tm(string):
     if isinstance(string, bytes):
@@ -634,7 +634,14 @@ Key information:
                                                                 block, pb_len, input_rev_com, input_two_stranded,
                                                                 logger=logger)
     
+        
         pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!    
+
+        print(f"- Total candidate probes designed: {len(pb_reports)}")
+        
+        msg = f'Unique candidate probe keys: {np.unique(np.array(list(pb_reports_list.keys()))).size}'
+        print(msg)
+        log_message(msg, logger, level=logging.WARNING)
 
         # add to attribute
         self.cand_probes = pb_reports
