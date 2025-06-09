@@ -7,7 +7,7 @@ import multiprocessing as mp
 
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import MeltingTemp
-from Bio.SeqUtils import GC
+from Bio.SeqUtils import gc_fraction
 # variables from local
 from . import _fasta_ext
 sys.path.append(os.getcwd())
@@ -28,7 +28,7 @@ def tm(string):
 def gc(string):
     if isinstance(string, bytes):
         string = string.decode()
-    return GC(string) / 100.
+    return gc_fraction(string) / 100.
 
 def str_to_list(var):
     "Converst a string to a list"
@@ -401,17 +401,17 @@ Key information:
             if check_extension(files,fasta_ext):
                 names,seqs=[],[]
                 for fl in _files:
-                    names_,seqs_=fastaread(fl,force_upper=True)
-                    if force_list:
+                    names_,seqs_=fastaread(fl,force_upper=True) # NOTE from Peter: fastaread returns a list of lists
+                    if force_list: # NOTE from Peter: force_list=True is used for the self_sequences OT map. names and seqs both become a list of lists containing 1 element each. In practice, this list will have one element, a single-element list.
                         names.append(names_)
                         seqs.append(seqs_)
                     else:
                         names.extend(names_)
                         seqs.extend(seqs_)
-                if not force_list:
+                if not force_list: # NOTE from Peter: This seems to let names and seqs to be a list of a single list.
                     names =[names]
                     seqs = [seqs]
-                if merge:
+                if merge: # NOTE from Peter: if merge, then the a single countTable counts all sequences in the list. Else, many countTables each with a single sequence considered is provided as OTmaps.
                     OTmaps = [OTmap(seqs,word_size=self.params_dic['word_size'],use_kmer=use_kmer,progress_report=False,save_file=save_file)]
                 else:
                     OTmaps = [OTmap(seq_,word_size=self.params_dic['word_size'],use_kmer=use_kmer,progress_report=False,save_file=save_file)
@@ -476,7 +476,7 @@ Key information:
             _input_map_dic['file'] = _file
             print(f"-- region: {_reg_id}, input file: {_input_map_dic['file']}")
 
-            self.files_to_OTmap('map_self_sequences', _input_map_dic)
+            self.files_to_OTmap('map_self_sequences', _input_map_dic) # NOTE from Peter: In each iteration, the self_sequences map is replated with the current input file.
             _num_candidate_probes = 0
             # loop through all possible positions
             for _i in range(len(_seq)-pb_len+1):
