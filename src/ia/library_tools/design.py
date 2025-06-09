@@ -4,7 +4,7 @@ import pickle
 import scipy.sparse as ss
 from tqdm import tqdm
 import multiprocessing as mp 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import repeat
 
 from Bio.SeqRecord import SeqRecord
@@ -21,6 +21,13 @@ from .LibraryTools import constant_zero_dict
 from .LibraryTools import seqrc
 from .LibraryTools import OTTable
 
+# logging setup
+import logging
+
+
+def log_message(msg, logger):
+    if logger is not None:
+        logger.info(msg)
 
 def tm(string):
     if isinstance(string, bytes):
@@ -451,14 +458,21 @@ Key information:
                     delattr(self, _map_key)
         print(f"Time to release OTmaps: {time.time()-start:.3f}s. ")
 
-    def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded):
+    def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded, logger=None):
         pb_report_region = {}
+
+        msg = f"-- designing region: {name}"
+        _design_start = time.time()
         if self.verbose:
-            print(f"-- designing region: {name}", end=' ')
-            _design_start = time.time()
+            print(msg, end=' ')
+        log_message(msg, logger)
+
         if len(seq) <= pb_len:
+            msg = f"Too short the sequence, skip."
             if self.verbose:
-                print(f"Too short the sequence, skip.")
+                print(msg)
+            log_message(msg, logger)
+
             return {}
         # compute this input file (fasta) into OTMap
         _input_map_dic = {_k:_v for _k,_v in self.map_dic['self_sequences'].items()}
@@ -570,12 +584,15 @@ Key information:
                                 if _map_rev_com or _map_two_stranded:
                                     pb_report_region[_rc_cand_seq][_map_key]+= _map.get(seqrc(_blk))
         
+        msg = f"- Designed {_num_candidate_probes} candidate probes in {time.time()-_design_start:.3f}s."
         if self.verbose:
-            print(f"- Designed {_num_candidate_probes} candidate probes in {time.time()-_design_start:.3f}s.")
+            print(msg)
+        log_message(msg, logger)
+
         return pb_report_region
 
 
-    def compute_pb_report(self, parallel=False, max_workers=None):
+    def compute_pb_report(self, parallel=False, max_workers=None, logging=False):
         block = self.params_dic['word_size']
         pb_len = self.params_dic['pb_len']
         #buffer_len = self.buffer_len
@@ -583,20 +600,39 @@ Key information:
         input_rev_com = self.sequence_dic.get('rev_com',False)
         input_two_stranded = self.sequence_dic.get('two_stranded',False)
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
+
+        msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
         if self.verbose:
-            print(f"- Designing targeting sequence for {len(self.input_seqs)} regions")
+            print(msg)
+        if logging:
+            logger = logging.getLogger(__name__)
+            logger.setLevel(logging.INFO)
+            logger.addHandler(logging.FileHandler('pb_reports.log', mode='w'))
+            logger.info(msg)
 
         reg_ids = list(range(len(self.input_seqs)))
         if parallel:
             pb_reports_list = []
             with ProcessPoolExecutor(max_workers=max_workers) as exe:
-                pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
-                                               repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
+                # pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
+                #                                repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
+                pb_reports_futures = [exe.submit(self.compute_pb_report_region, reg_id, name, seq, file,
+                                              block, pb_len, input_rev_com, input_two_stranded, logger=logger)
+                                              for reg_id, name, seq, file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files)]
+
+                
+                for fut in tqdm(as_completed(pb_reports_futures), total=len(pb_reports_futures)):
+                    result = fut.result()
+                    result_name = result[result.keys()[0]]['reg_name']
+                    result_regid = result[result.keys()[0]]['reg_index']
+                    print(f'Completed region {result_name} with reg_id {result_regid}')
+                    pb_reports_list.append(result)
         else:
             # iterate across multiple regions (input seqs)
             for _reg_id, _name, _seq, _file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files):
                 pb_reports_list = self.compute_pb_report_region(_reg_id, _name, _seq, _file,
-                                                                block, pb_len, input_rev_com, input_two_stranded)
+                                                                block, pb_len, input_rev_com, input_two_stranded,
+                                                                logger=logger)
     
         pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!    
 
