@@ -4,6 +4,8 @@ import pickle
 import scipy.sparse as ss
 from tqdm import tqdm
 import multiprocessing as mp 
+from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
 
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import MeltingTemp
@@ -449,7 +451,131 @@ Key information:
                     delattr(self, _map_key)
         print(f"Time to release OTmaps: {time.time()-start:.3f}s. ")
 
-    def compute_pb_report(self):
+    def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded):
+        pb_report_region = {}
+        if self.verbose:
+            print(f"-- designing region: {name}", end=' ')
+            _design_start = time.time()
+        if len(seq) <= pb_len:
+            if self.verbose:
+                print(f"Too short the sequence, skip.")
+            return {}
+        # compute this input file (fasta) into OTMap
+        _input_map_dic = {_k:_v for _k,_v in self.map_dic['self_sequences'].items()}
+        _input_map_dic['file'] = file
+        print(f"-- region: {reg_id}, input file: {_input_map_dic['file']}")
+
+        self.files_to_OTmap('map_self_sequences', _input_map_dic) # NOTE from Peter: In each iteration, the self_sequences map is replated with the current input file.
+        _num_candidate_probes = 0
+        # loop through all possible positions
+        for _i in range(len(seq)-pb_len+1):
+            # extract sequence
+            _cand_seq = seq[_i:_i+pb_len]
+            _rc_cand_seq = seqrc(_cand_seq)
+
+            # case 0, here, skip any sequence contain N
+            if 'N' in _cand_seq:
+                continue   
+
+            # if design forward strand:
+            if not input_rev_com or input_two_stranded:
+                # get forward strand sequence
+                if isinstance(_cand_seq, str):
+                    _cand_seq = _cand_seq.encode()
+                # create basic info
+                pb_report_region[_cand_seq] = constant_zero_dict()
+                pb_report_region[_cand_seq].update(
+                    {'name':f'{name}_reg_{reg_id}_pb_{_i}',
+                    'reg_index':reg_id,
+                    'reg_name':name,
+                    'pb_index': _i,
+                    'strand':'+',
+                    'gc':gc(_cand_seq),
+                    'tm':tm(_cand_seq),}
+                )
+                _num_candidate_probes += 1
+                # update map_keys
+                for _key, _curr_dic in self.map_dic.items():
+                    _map_use_kmer = _curr_dic.get('use_kmer',True)
+                    _map_rev_com = _curr_dic.get('rev_com',False)
+                    _map_two_stranded = _curr_dic.get('two_stranded',False)               
+                    _map_key = f"map_{_key}"
+                    _maps = getattr(self, _map_key)
+                    # process map counts, use kmer
+                    if _map_use_kmer:
+                        for _map in _maps:
+                            # forward from maps
+                            if not _map_rev_com or _map_two_stranded:
+                                pb_report_region[_cand_seq][_map_key]+= _map.get(_cand_seq)
+                            # reverse from maps
+                            if _map_rev_com or _map_two_stranded:
+                                pb_report_region[_cand_seq][_map_key]+= _map.get(_cand_seq, rc=True)
+                    # not use kmer:
+                    else:
+                        #Iterate through block regions:
+                        for j in range(pb_len-block+1):
+                            _blk = _cand_seq[j:j+block]
+                            for _map in _maps:
+                                # forward from maps
+                                if not _map_rev_com or _map_two_stranded:
+                                    pb_report_region[_cand_seq][_map_key] += _map.get(_blk)
+                                # reverse from maps
+                                if _map_rev_com or _map_two_stranded:
+                                    pb_report_region[_cand_seq][_map_key] += _map.get(seqrc(_blk))
+
+            # if design reverse streand:
+            if input_rev_com or input_two_stranded:
+                # get reverse strand sequence
+                if isinstance(_rc_cand_seq, str):
+                    _rc_cand_seq = _rc_cand_seq.encode()
+                # create basic info
+                pb_report_region[_rc_cand_seq] = constant_zero_dict()
+                pb_report_region[_rc_cand_seq].update(
+                    {'name':f'{name}_reg_{reg_id}_pb_{_i}',
+                    'reg_index':reg_id,
+                    'reg_name':name,
+                    'pb_index': _i,
+                    'strand':'-',
+                    'gc':gc(_rc_cand_seq),
+                    'tm':tm(_rc_cand_seq),}
+                )
+                _num_candidate_probes += 1
+                # update map_keys
+                for _key, _curr_dic in self.map_dic.items():
+                    _map_use_kmer = _curr_dic.get('use_kmer',True)
+                    _map_rev_com = _curr_dic.get('rev_com',False)
+                    _map_two_stranded = _curr_dic.get('two_stranded',False)               
+                    _map_key = f"map_{_key}"
+                    _maps = getattr(self, _map_key)
+                    # process map counts, use kmer
+                    if _map_use_kmer:
+                        for _map in _maps:
+                            # forward from maps
+                            if not _map_rev_com or _map_two_stranded:
+                                pb_report_region[_rc_cand_seq][_map_key]+= _map.get(_rc_cand_seq)
+                            # reverse from maps
+                            if _map_rev_com or _map_two_stranded:
+                                pb_report_region[_rc_cand_seq][_map_key]+= _map.get(_rc_cand_seq, rc=True)
+                    # not use kmer:
+                    else:
+                        #Iterate through block regions:
+                        for j in range(pb_len-block+1):
+                            _blk = _rc_cand_seq[j:j+block]
+                            for _map in _maps:
+                                # forward from maps
+                                if not _map_rev_com or _map_two_stranded:
+                                    #blks.append(_rc_cand_seq)
+                                    pb_report_region[_rc_cand_seq][_map_key] += _map.get(_blk)
+                                # reverse from maps
+                                if _map_rev_com or _map_two_stranded:
+                                    pb_report_region[_rc_cand_seq][_map_key]+= _map.get(seqrc(_blk))
+        
+        if self.verbose:
+            print(f"- Designed {_num_candidate_probes} candidate probes in {time.time()-_design_start:.3f}s.")
+        return pb_report_region
+
+
+    def compute_pb_report(self, parallel=False, max_workers=None):
         block = self.params_dic['word_size']
         pb_len = self.params_dic['pb_len']
         #buffer_len = self.buffer_len
@@ -459,130 +585,21 @@ Key information:
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
         if self.verbose:
             print(f"- Designing targeting sequence for {len(self.input_seqs)} regions")
-        # initialize
-        pb_reports = {}
 
-        # iterate across multiple regions (input seqs)
-        for _reg_id, (_name, _seq, _file) in enumerate(zip(self.input_names, self.input_seqs, self.input_files)):
-            if self.verbose:
-                print(f"-- designing region: {_name}", end=' ')
-                _design_start = time.time()
-            if len(_seq) <= pb_len:
-                if self.verbose:
-                    print(f"Too short the sequence, skip.")
-                continue
-            # compute this input file (fasta) into OTMap
-            _input_map_dic = {_k:_v for _k,_v in self.map_dic['self_sequences'].items()}
-            _input_map_dic['file'] = _file
-            print(f"-- region: {_reg_id}, input file: {_input_map_dic['file']}")
+        reg_ids = list(range(len(self.input_seqs)))
+        if parallel:
+            pb_reports_list = []
+            with ProcessPoolExecutor(max_workers=max_workers) as exe:
+                pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
+                                               repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
+        else:
+            # iterate across multiple regions (input seqs)
+            for _reg_id, _name, _seq, _file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files):
+                pb_reports_list = self.compute_pb_report_region(_reg_id, _name, _seq, _file,
+                                                                block, pb_len, input_rev_com, input_two_stranded)
+    
+        pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!    
 
-            self.files_to_OTmap('map_self_sequences', _input_map_dic) # NOTE from Peter: In each iteration, the self_sequences map is replated with the current input file.
-            _num_candidate_probes = 0
-            # loop through all possible positions
-            for _i in range(len(_seq)-pb_len+1):
-                # extract sequence
-                _cand_seq = _seq[_i:_i+pb_len]
-                _rc_cand_seq = seqrc(_cand_seq)
-
-                # case 0, here, skip any sequence contain N
-                if 'N' in _cand_seq:
-                    continue   
-
-                # if design forward strand:
-                if not input_rev_com or input_two_stranded:
-                    # get forward strand sequence
-                    if isinstance(_cand_seq, str):
-                        _cand_seq = _cand_seq.encode()
-                    # create basic info
-                    pb_reports[_cand_seq] = constant_zero_dict()
-                    pb_reports[_cand_seq].update(
-                        {'name':f'{_name}_reg_{_reg_id}_pb_{_i}',
-                        'reg_index':_reg_id,
-                        'reg_name':_name,
-                        'pb_index': _i,
-                        'strand':'+',
-                        'gc':gc(_cand_seq),
-                        'tm':tm(_cand_seq),}
-                    )
-                    _num_candidate_probes += 1
-                    # update map_keys
-                    for _key, _curr_dic in self.map_dic.items():
-                        _map_use_kmer = _curr_dic.get('use_kmer',True)
-                        _map_rev_com = _curr_dic.get('rev_com',False)
-                        _map_two_stranded = _curr_dic.get('two_stranded',False)               
-                        _map_key = f"map_{_key}"
-                        _maps = getattr(self, _map_key)
-                        # process map counts, use kmer
-                        if _map_use_kmer:
-                            for _map in _maps:
-                                # forward from maps
-                                if not _map_rev_com or _map_two_stranded:
-                                    pb_reports[_cand_seq][_map_key]+= _map.get(_cand_seq)
-                                # reverse from maps
-                                if _map_rev_com or _map_two_stranded:
-                                    pb_reports[_cand_seq][_map_key]+= _map.get(_cand_seq, rc=True)
-                        # not use kmer:
-                        else:
-                            #Iterate through block regions:
-                            for j in range(pb_len-block+1):
-                                _blk = _cand_seq[j:j+block]
-                                for _map in _maps:
-                                    # forward from maps
-                                    if not _map_rev_com or _map_two_stranded:
-                                        pb_reports[_cand_seq][_map_key] += _map.get(_blk)
-                                    # reverse from maps
-                                    if _map_rev_com or _map_two_stranded:
-                                        pb_reports[_cand_seq][_map_key] += _map.get(seqrc(_blk))
-
-                # if design reverse streand:
-                if input_rev_com or input_two_stranded:
-                    # get reverse strand sequence
-                    if isinstance(_rc_cand_seq, str):
-                        _rc_cand_seq = _rc_cand_seq.encode()
-                    # create basic info
-                    pb_reports[_rc_cand_seq] = constant_zero_dict()
-                    pb_reports[_rc_cand_seq].update(
-                        {'name':f'{_name}_reg_{_reg_id}_pb_{_i}',
-                        'reg_index':_reg_id,
-                        'reg_name':_name,
-                        'pb_index': _i,
-                        'strand':'-',
-                        'gc':gc(_rc_cand_seq),
-                        'tm':tm(_rc_cand_seq),}
-                    )
-                    _num_candidate_probes += 1
-                    # update map_keys
-                    for _key, _curr_dic in self.map_dic.items():
-                        _map_use_kmer = _curr_dic.get('use_kmer',True)
-                        _map_rev_com = _curr_dic.get('rev_com',False)
-                        _map_two_stranded = _curr_dic.get('two_stranded',False)               
-                        _map_key = f"map_{_key}"
-                        _maps = getattr(self, _map_key)
-                        # process map counts, use kmer
-                        if _map_use_kmer:
-                            for _map in _maps:
-                                # forward from maps
-                                if not _map_rev_com or _map_two_stranded:
-                                    pb_reports[_rc_cand_seq][_map_key]+= _map.get(_rc_cand_seq)
-                                # reverse from maps
-                                if _map_rev_com or _map_two_stranded:
-                                    pb_reports[_rc_cand_seq][_map_key]+= _map.get(_rc_cand_seq, rc=True)
-                        # not use kmer:
-                        else:
-                            #Iterate through block regions:
-                            for j in range(pb_len-block+1):
-                                _blk = _rc_cand_seq[j:j+block]
-                                for _map in _maps:
-                                    # forward from maps
-                                    if not _map_rev_com or _map_two_stranded:
-                                        #blks.append(_rc_cand_seq)
-                                        pb_reports[_rc_cand_seq][_map_key] += _map.get(_blk)
-                                    # reverse from maps
-                                    if _map_rev_com or _map_two_stranded:
-                                        pb_reports[_rc_cand_seq][_map_key]+= _map.get(seqrc(_blk))
-            
-            if self.verbose:
-                print(f"- Designed {_num_candidate_probes} candidate probes in {time.time()-_design_start:.3f}s.")
         # add to attribute
         self.cand_probes = pb_reports
         # save
