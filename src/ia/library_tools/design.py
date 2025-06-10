@@ -62,7 +62,7 @@ def check_extension(files,extensions=_fasta_ext):
     return np.prod([os.path.basename(fl).split(os.path.extsep)[-1] in extensions_ for fl in _files])==1
     
 class countTable():
-    def __init__(self,word=17,sparse=False,save_file=None,fromfile=False,verbose=False):
+    def __init__(self,word=17,sparse=False,save_file=None,fromfile=False,verbose=False, use_shared_mem=False):
         """
         This constructs sparse array count table using scipy lil_matrix for efficient construction.
         """
@@ -83,6 +83,9 @@ class countTable():
         self.matrix=[]
         self.ints=[]
         self.seqs,self.names = [],[]
+        self.use_shared_mem = use_shared_mem
+
+
     def create_matrix(self):
         if self.sparse:
             self.max_sparse_ind = 2**31 #scipy.sparse decided to encoded in indeces in int32. Correct!
@@ -104,10 +107,31 @@ class countTable():
     def load(self):
         if self.save_file is not None:
             if self.sparse:
+                if self.use_shared_mem:
+                    raise NotImplementedError("Loading sparse matrices with shared memory is not implemented yet.")
                 self.matrix = ss.load_npz(self.save_file)
                 self.max_sparse_ind = 2**31 #scipy.sparse decided to encoded in indeces in int32. Correct!
             else:
-                self.matrix = np.fromfile(self.save_file,dtype=np.uint16)
+                ct_mat = np.fromfile(self.save_file,dtype=np.uint16)
+                if self.use_shared_mem:
+                    # create shared memory array
+                    self.shm_name = self.save_file.split(os.path.extsep)[0]
+                    self.shm_shape = ct_mat.shape
+                    self.shm_dtype = ct_mat.dtype
+                    shm = mp.shared_memory.SharedMemory(create=True, size=ct_mat.nbytes, name=self.shm_name)
+                    shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
+                    shared_mat[:] = ct_mat[:]
+                else:
+                    self.matrix = ct_mat
+    
+
+    # def load_small(self):
+    #     if self.save_file is not None:
+    #         if not self.sparse:
+    #             self.matrix = 
+    #             self.matrix = np.fromfile(self.save_file, dypte=np.uint16)
+
+
     def complete(self,verbose=False):
         """a np.unique is performed on self.ints and the number of occurences for each unique 17mer (clipped to 2^16-1) is recorded in a sparse array self.matrix"""
         if verbose:
@@ -235,6 +259,8 @@ class countTable():
             
         results = None
         if self.fromfile:
+            if self.use_shared_mem:
+                raise NotImplementedError("Loading countTables from file with shared memory is not implemented yet.")
             #read from file
             if self.f is None:
                 self.f = open(self.filename,'rb')
@@ -248,11 +274,19 @@ class countTable():
         else:
             #read from RAM
             if self.sparse:
+                if self.use_shared_mem:
+                    raise NotImplementedError("Loading sparse matrices with shared memory is not implemented yet.")
                 pos_col = int(ints/self.max_sparse_ind)
                 pos_row = ints-pos_col*self.max_sparse_ind
                 results = np.sum(self.matrix[pos_col,pos_row])
             else:
-                results = np.sum(self.matrix[ints])
+                if self.use_shared_mem:
+                    # use matrix in shared memory
+                    shm = mp.shared_memory.SharedMemory(name=self.shm_name)
+                    shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
+                    results = np.sum(shared_mat[ints])
+                else:
+                    results = np.sum(self.matrix[ints])
         return results
 
 def OTmap(seqs,word_size=17,use_kmer=True,progress_report=False,save_file=None,sparse=False):
@@ -381,19 +415,20 @@ Key information:
         self.sequence_dic['input_names']=self.input_names
         self.sequence_dic['input_seqs']=self.input_seqs
 
-    def computeOTmaps(self):
+    def computeOTmaps(self, use_shared_mem=False):
         """This creates maps:
         Iterates over keys in map_dic and uses self.files_to_OTmap.
         """
         start = time.time()
         for key in list(self.map_dic.keys()):
             if key != 'self_sequences':
-                self.files_to_OTmap("map_"+key,self.map_dic[key])
+                self.files_to_OTmap("map_"+key,self.map_dic[key], use_shared_mem=use_shared_mem)
         end = time.time()
         print("Time(s): "+str(end-start))
 
-    def files_to_OTmap(self, map_key, curr_dic):
+    def files_to_OTmap(self, map_key, curr_dic, use_shared_mem=False):
         "This function transforms a file or list of files to an OT map and sets it as an attribute in self."
+
         if self.verbose:
             print(f"-- setting attribute: {map_key}",)
             _start_time = time.time()
@@ -409,6 +444,8 @@ Key information:
             fasta_ext = ['fa','fasta']
             # create tables if sequences are given
             if check_extension(files,fasta_ext):
+                if use_shared_mem:
+                    raise NotImplementedError("Loading OTmaps through fasta files with shared memory is not implemented yet.")
                 names,seqs=[],[]
                 for fl in _files:
                     names_,seqs_=fastaread(fl,force_upper=True) # NOTE from Peter: fastaread returns a list of lists
@@ -429,17 +466,19 @@ Key information:
                 setattr(self,map_key,OTmaps)
             # for pre-existing tables, load
             elif len(_files)==1 and check_extension(files, 'npy'):
-                OTMap_ = countTable(word=self.params_dic['word_size'],sparse=False,save_file=_files[0])
-                OTMap_.load()
+                OTMap_ = countTable(word=self.params_dic['word_size'],sparse=False,save_file=_files[0], use_shared_mem=use_shared_mem)
+                OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
                 OTmaps = [OTMap_]
                 setattr(self,map_key,OTmaps)
             # for pre-existing tables, load
             elif len(_files)==1 and check_extension(files, 'npz'):
-                OTMap_ = countTable(word=self.params_dic['word_size'],sparse=True,save_file=_files[0])
-                OTMap_.load()
+                OTMap_ = countTable(word=self.params_dic['word_size'],sparse=True,save_file=_files[0], use_shared_mem=use_shared_mem)
+                OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
                 OTmaps = [OTMap_]
                 setattr(self,map_key,OTmaps)
             elif len(_files)==1 and check_extension(files, 'pkl'):
+                if use_shared_mem:
+                    raise NotImplementedError("Loading OTmaps through pkl files with shared memory is not implemented yet.")
                 OTmaps = [pickle.load(open(_files[0],'rb'))]
                 setattr(self,map_key,OTmaps)
             else:
@@ -599,6 +638,15 @@ Key information:
         log_message(msg, logger)
 
         return pb_report_region
+
+    # def compute_pb_report_small(self, parallel=False, max_workers=None, use_logging=False):
+    #     '''
+    #     This function tests shared memory using a small random arrays instead of loading countTables.
+    #     '''
+    #     if parallel:
+    #         pb_reports_list = []
+    #         with ProcessPoolExecutor(max_workers=max_workers) as exe:
+    #             pass
 
 
     def compute_pb_report(self, parallel=False, max_workers=None, use_logging=False):
