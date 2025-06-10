@@ -6,6 +6,7 @@ from tqdm import tqdm
 import multiprocessing as mp 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import repeat
+import psutil
 
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import MeltingTemp
