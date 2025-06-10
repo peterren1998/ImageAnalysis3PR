@@ -459,6 +459,8 @@ Key information:
         print(f"Time to release OTmaps: {time.time()-start:.3f}s. ")
 
     def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded, logger=None):
+        proc = psutil.Process(os.getpid())
+
         pb_report_region = {}
 
         msg = f"-- designing region: {name}"
@@ -483,6 +485,12 @@ Key information:
         _num_candidate_probes = 0
         # loop through all possible positions
         for _i in range(len(seq)-pb_len+1):
+
+            msg = f'Current memory usage: {proc.memory_info().rss/1024**2:.1f} MB'
+            if self.verbose:
+                print(msg)
+            log_message(msg, logger)
+
             # extract sequence
             _cand_seq = seq[_i:_i+pb_len]
             _rc_cand_seq = seqrc(_cand_seq)
@@ -592,7 +600,7 @@ Key information:
         return pb_report_region
 
 
-    def compute_pb_report(self, parallel=False, max_workers=None, logging=False):
+    def compute_pb_report(self, parallel=False, max_workers=None, use_logging=False):
         block = self.params_dic['word_size']
         pb_len = self.params_dic['pb_len']
         #buffer_len = self.buffer_len
@@ -604,11 +612,13 @@ Key information:
         msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
         if self.verbose:
             print(msg)
-        if logging:
+        if use_logging:
             logger = logging.getLogger(__name__)
             logger.setLevel(logging.INFO)
             logger.addHandler(logging.FileHandler('pb_reports.log', mode='w'))
             logger.info(msg)
+        else:
+            logger = None
 
         reg_ids = list(range(len(self.input_seqs)))
         if parallel:
