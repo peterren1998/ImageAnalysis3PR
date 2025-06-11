@@ -4,6 +4,7 @@ import pickle
 import scipy.sparse as ss
 from tqdm import tqdm
 import multiprocessing as mp 
+from multiprocessing import shared_memory
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import repeat
 import psutil
@@ -29,6 +30,21 @@ import logging
 def log_message(msg, logger, level=logging.INFO):
     if logger is not None:
         logger.log(level, msg)
+
+def filename_without_ext(path):
+    return os.path.splitext(os.path.basename(path))[0]
+
+def release_shared_memory(name):
+    """Release shared memory block with the given name."""
+    try:
+        shm = shared_memory.SharedMemory(name=name)
+        shm.close()
+        shm.unlink()
+        print(f"Shared memory block '{name}' released.")
+    except FileNotFoundError:
+        print(f"Shared memory block '{name}' not found.")
+    except Exception as e:
+        print(f"Error releasing shared memory block '{name}': {e}")
 
 def tm(string):
     if isinstance(string, bytes):
@@ -104,6 +120,7 @@ class countTable():
                 ss.save_npz(self.save_file.split(os.path.extsep)[0], self.matrix)
             else:
                 self.matrix.tofile(self.save_file)
+                # self.matrix.save(self.save_file)
     def load(self):
         if self.save_file is not None:
             if self.sparse:
@@ -112,15 +129,28 @@ class countTable():
                 self.matrix = ss.load_npz(self.save_file)
                 self.max_sparse_ind = 2**31 #scipy.sparse decided to encoded in indeces in int32. Correct!
             else:
-                ct_mat = np.fromfile(self.save_file,dtype=np.uint16)
+                # ct_mat = np.memmap(self.save_file, dtype=np.uint16, mode='r', shape=(self.max_size,))
+                # ct_mat = np.load(self.save_file, mmap_mode='r')
+                ct_mat = np.fromfile(self.save_file, dtype=np.uint16)
+                # h = ct_mat.shape[0] // 2
                 if self.use_shared_mem:
                     # create shared memory array
-                    self.shm_name = self.save_file.split(os.path.extsep)[0]
+                    self.shm_name = filename_without_ext(self.save_file)
+                    print(f'Creating shared memory block with name: {self.shm_name}')
                     self.shm_shape = ct_mat.shape
                     self.shm_dtype = ct_mat.dtype
-                    shm = mp.shared_memory.SharedMemory(create=True, size=ct_mat.nbytes, name=self.shm_name)
+                    shm = shared_memory.SharedMemory(create=True, size=ct_mat.nbytes, name=self.shm_name)
                     shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
+                    # shared_mat[:h] = ct_mat[:h]
+                    # shared_mat[h:] = ct_mat[h:]
                     shared_mat[:] = ct_mat[:]
+                    proc = psutil.Process(os.getpid())
+                    msg = f'memory usage before freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
+                    print(msg)
+                    del ct_mat
+                    msg = f'memory usage after freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
+                    print(msg)
+                    # shm.close()
                 else:
                     self.matrix = ct_mat
     
@@ -282,7 +312,7 @@ class countTable():
             else:
                 if self.use_shared_mem:
                     # use matrix in shared memory
-                    shm = mp.shared_memory.SharedMemory(name=self.shm_name)
+                    shm = shared_memory.SharedMemory(name=self.shm_name)
                     shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
                     results = np.sum(shared_mat[ints])
                 else:
@@ -422,7 +452,7 @@ Key information:
         start = time.time()
         for key in list(self.map_dic.keys()):
             if key != 'self_sequences':
-                self.files_to_OTmap("map_"+key,self.map_dic[key], use_shared_mem=use_shared_mem)
+                self.files_to_OTmap("map_"+key, self.map_dic[key], use_shared_mem=use_shared_mem)
         end = time.time()
         print("Time(s): "+str(end-start))
 
@@ -467,13 +497,19 @@ Key information:
             # for pre-existing tables, load
             elif len(_files)==1 and check_extension(files, 'npy'):
                 OTMap_ = countTable(word=self.params_dic['word_size'],sparse=False,save_file=_files[0], use_shared_mem=use_shared_mem)
-                OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
+                try:
+                    OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
+                except FileExistsError:
+                    print(f"File {OTMap_.save_file} already exists. Skipping load. Remember to release shared memory after use.")
                 OTmaps = [OTMap_]
                 setattr(self,map_key,OTmaps)
             # for pre-existing tables, load
             elif len(_files)==1 and check_extension(files, 'npz'):
                 OTMap_ = countTable(word=self.params_dic['word_size'],sparse=True,save_file=_files[0], use_shared_mem=use_shared_mem)
-                OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
+                try:
+                    OTMap_.load()  # When OTMap_.use_shared_mem is True, this sets OTMap_.shm_name
+                except FileExistsError:
+                    print(f"File {OTMap_.save_file} already exists. Skipping load. Remember to release shared memory after use.")
                 OTmaps = [OTMap_]
                 setattr(self,map_key,OTmaps)
             elif len(_files)==1 and check_extension(files, 'pkl'):
@@ -489,12 +525,20 @@ Key information:
         if self.verbose:
             print(f"--- finish {map_key} in {time.time()-_start_time:.3f}s.")
 
-    def release_OTmaps(self,):
+    def release_OTmaps(self):
         start = time.time()
         for key in list(self.map_dic.keys()):
             if key != 'self_sequences':
                 _map_key = "map_"+key
                 if hasattr(self, _map_key):
+                    _map = getattr(self, _map_key)
+                    if isinstance(_map, list) and len(_map) > 0:
+                        for _m in _map:
+                            if hasattr(_m, 'shm_name'):
+                                print(f'Releasing shared memory for {_m.shm_name}')
+                                shm = shared_memory.SharedMemory(name=_m.shm_name)
+                                shm.close()
+                                shm.unlink()
                     delattr(self, _map_key)
         print(f"Time to release OTmaps: {time.time()-start:.3f}s. ")
 
@@ -526,10 +570,10 @@ Key information:
         # loop through all possible positions
         for _i in range(len(seq)-pb_len+1):
 
-            msg = f'Current memory usage: {proc.memory_info().rss/1024**2:.1f} MB'
-            if self.verbose:
-                print(msg)
-            log_message(msg, logger)
+            # msg = f'Current memory usage: {proc.memory_info().rss/1024**2:.1f} MB'
+            # if self.verbose:
+            #     print(msg)
+            # log_message(msg, logger)
 
             # extract sequence
             _cand_seq = seq[_i:_i+pb_len]
