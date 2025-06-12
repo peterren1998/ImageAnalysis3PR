@@ -4,7 +4,7 @@ import pickle
 import scipy.sparse as ss
 from tqdm import tqdm
 import multiprocessing as mp 
-from multiprocessing import shared_memory
+from multiprocessing import shared_memory, resource_tracker
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import repeat
 import psutil
@@ -129,9 +129,9 @@ class countTable():
                 self.matrix = ss.load_npz(self.save_file)
                 self.max_sparse_ind = 2**31 #scipy.sparse decided to encoded in indeces in int32. Correct!
             else:
-                # ct_mat = np.memmap(self.save_file, dtype=np.uint16, mode='r', shape=(self.max_size,))
+                ct_mat = np.memmap(self.save_file, dtype=np.uint16, mode='r', shape=(self.max_size,))
                 # ct_mat = np.load(self.save_file, mmap_mode='r')
-                ct_mat = np.fromfile(self.save_file, dtype=np.uint16)
+                # ct_mat = np.fromfile(self.save_file, dtype=np.uint16)
                 # h = ct_mat.shape[0] // 2
                 if self.use_shared_mem:
                     # create shared memory array
@@ -140,17 +140,18 @@ class countTable():
                     self.shm_shape = ct_mat.shape
                     self.shm_dtype = ct_mat.dtype
                     shm = shared_memory.SharedMemory(create=True, size=ct_mat.nbytes, name=self.shm_name)
+                    # resource_tracker.unregister(shm.name, 'shared_memory')
                     shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
                     # shared_mat[:h] = ct_mat[:h]
                     # shared_mat[h:] = ct_mat[h:]
                     shared_mat[:] = ct_mat[:]
-                    proc = psutil.Process(os.getpid())
-                    msg = f'memory usage before freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
-                    print(msg)
+                    # proc = psutil.Process(os.getpid())
+                    # msg = f'memory usage before freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
+                    # print(msg)
                     del ct_mat
-                    msg = f'memory usage after freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
-                    print(msg)
-                    # shm.close()
+                    # msg = f'memory usage after freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
+                    # print(msg)
+                    shm.close()
                 else:
                     self.matrix = ct_mat
     
@@ -445,12 +446,15 @@ Key information:
         self.sequence_dic['input_names']=self.input_names
         self.sequence_dic['input_seqs']=self.input_seqs
 
-    def computeOTmaps(self, use_shared_mem=False):
+    def computeOTmaps(self, use_shared_mem=False, map_keys=None):
         """This creates maps:
         Iterates over keys in map_dic and uses self.files_to_OTmap.
         """
+        if map_keys is None:
+            map_keys = list(self.map_dic.keys())
+
         start = time.time()
-        for key in list(self.map_dic.keys()):
+        for key in map_keys:
             if key != 'self_sequences':
                 self.files_to_OTmap("map_"+key, self.map_dic[key], use_shared_mem=use_shared_mem)
         end = time.time()
@@ -542,12 +546,12 @@ Key information:
                     delattr(self, _map_key)
         print(f"Time to release OTmaps: {time.time()-start:.3f}s. ")
 
-    def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded, logger=None):
+    def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded, logger=None, map_keys=None):
         proc = psutil.Process(os.getpid())
 
         pb_report_region = {}
 
-        msg = f"-- designing region: {name}"
+        msg = f"-- designing region: {name} with map_keys: {map_keys}"
         _design_start = time.time()
         if self.verbose:
             print(msg, end=' ')
@@ -589,6 +593,7 @@ Key information:
                 if isinstance(_cand_seq, str):
                     _cand_seq = _cand_seq.encode()
                 # create basic info
+                # if _cand_seq not in pb_report_region:
                 pb_report_region[_cand_seq] = constant_zero_dict()
                 pb_report_region[_cand_seq].update(
                     {'name':f'{name}_reg_{reg_id}_pb_{_i}',
@@ -606,6 +611,8 @@ Key information:
                     _map_rev_com = _curr_dic.get('rev_com',False)
                     _map_two_stranded = _curr_dic.get('two_stranded',False)               
                     _map_key = f"map_{_key}"
+                    if map_keys is not None and _key not in map_keys:
+                        continue
                     _maps = getattr(self, _map_key)
                     # process map counts, use kmer
                     if _map_use_kmer:
@@ -652,6 +659,8 @@ Key information:
                     _map_rev_com = _curr_dic.get('rev_com',False)
                     _map_two_stranded = _curr_dic.get('two_stranded',False)               
                     _map_key = f"map_{_key}"
+                    if map_keys is not None and _key not in map_keys:
+                        continue
                     _maps = getattr(self, _map_key)
                     # process map counts, use kmer
                     if _map_use_kmer:
@@ -693,7 +702,7 @@ Key information:
     #             pass
 
 
-    def compute_pb_report(self, parallel=False, max_workers=None, use_logging=False):
+    def compute_pb_report(self, parallel=False, max_workers=None, use_logging=False, map_keys=None, update=False):
         block = self.params_dic['word_size']
         pb_len = self.params_dic['pb_len']
         #buffer_len = self.buffer_len
@@ -702,54 +711,73 @@ Key information:
         input_two_stranded = self.sequence_dic.get('two_stranded',False)
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
 
+        # if update:
+        #     pb_reports = self.cand_probes
+        # else:
+        #     pb_reports = None
+
         msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
         if self.verbose:
             print(msg)
         if use_logging:
             logger = logging.getLogger(__name__)
             logger.setLevel(logging.INFO)
-            logger.addHandler(logging.FileHandler('pb_reports.log', mode='w'))
+            logger.addHandler(logging.FileHandler('pb_reports.log', mode='a'))
             logger.info(msg)
         else:
             logger = None
 
         reg_ids = list(range(len(self.input_seqs)))
+        pb_reports_list = []
         if parallel:
-            pb_reports_list = []
             with ProcessPoolExecutor(max_workers=max_workers) as exe:
                 # pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
                 #                                repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
                 pb_reports_futures = [exe.submit(self.compute_pb_report_region, reg_id, name, seq, file,
-                                              block, pb_len, input_rev_com, input_two_stranded, logger=logger)
+                                              block, pb_len, input_rev_com, input_two_stranded, logger=logger, map_keys=map_keys)
                                               for reg_id, name, seq, file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files)]
 
                 
-                for fut in tqdm(as_completed(pb_reports_futures), total=len(pb_reports_futures)):
+                # for fut in tqdm(as_completed(pb_reports_futures), total=len(pb_reports_futures)):
+                for fut in as_completed(pb_reports_futures):
+
                     result = fut.result()
-                    result_name = result[result.keys()[0]]['reg_name']
-                    result_regid = result[result.keys()[0]]['reg_index']
+                    print(result)
+                    print(f"Result keys: {list(result.keys())}")
+                    result_name = result[list(result.keys())[0]]['reg_name']
+                    result_regid = result[list(result.keys())[0]]['reg_index']
                     print(f'Completed region {result_name} with reg_id {result_regid}')
                     pb_reports_list.append(result)
         else:
             # iterate across multiple regions (input seqs)
             for _reg_id, _name, _seq, _file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files):
-                pb_reports_list = self.compute_pb_report_region(_reg_id, _name, _seq, _file,
+                pb_reports_list.append(self.compute_pb_report_region(_reg_id, _name, _seq, _file,
                                                                 block, pb_len, input_rev_com, input_two_stranded,
-                                                                logger=logger)
+                                                                logger=logger, map_keys=map_keys))
     
         
-        pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!    
+        pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!
+
+
+
+
+        if update:
+            for cand_seq in pb_reports.keys():
+                for map_key in pb_reports[cand_seq].keys():
+                    self.cand_probes[cand_seq][map_key] = pb_reports[cand_seq][map_key]
+        else:
+            self.cand_probes = pb_reports
+
+        # save
+        self.save_to_file()
+
 
         print(f"- Total candidate probes designed: {len(pb_reports)}")
         
-        msg = f'Unique candidate probe keys: {np.unique(np.array(list(pb_reports_list.keys()))).size}'
-        print(msg)
-        log_message(msg, logger, level=logging.WARNING)
+        # msg = f'Unique candidate probe keys: {np.unique(np.array(list(pb_reports.keys()))).size}'
+        # print(msg)
+        # log_message(msg, logger, level=logging.WARNING)
 
-        # add to attribute
-        self.cand_probes = pb_reports
-        # save
-        self.save_to_file()
 
     def check_probes(self, _cand_probes=None, _check_dic=None, pick_probe_by_hits=True):
         # load candidate probes
