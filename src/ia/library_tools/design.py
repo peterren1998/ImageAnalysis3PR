@@ -147,7 +147,6 @@ class countTable():
                 self.max_sparse_ind = 2**31 #scipy.sparse decided to encoded in indeces in int32. Correct!
             else:
                 ct_mat = np.memmap(self.save_file, dtype=np.uint16, mode='r', shape=(self.max_size,))
-                # ct_mat = np.load(self.save_file, mmap_mode='r')
                 # ct_mat = np.fromfile(self.save_file, dtype=np.uint16)
                 # h = ct_mat.shape[0] // 2
                 if self.use_shared_mem:
@@ -157,28 +156,14 @@ class countTable():
                     self.shm_shape = ct_mat.shape
                     self.shm_dtype = ct_mat.dtype
                     shm = shared_memory.SharedMemory(create=True, size=ct_mat.nbytes, name=self.shm_name)
-                    # resource_tracker.unregister(shm.name, 'shared_memory')
                     shared_mat = np.ndarray(self.shm_shape, dtype=self.shm_dtype, buffer=shm.buf)
                     # shared_mat[:h] = ct_mat[:h]
                     # shared_mat[h:] = ct_mat[h:]
                     shared_mat[:] = ct_mat[:]
-                    # proc = psutil.Process(os.getpid())
-                    # msg = f'memory usage before freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
-                    # print(msg)
                     del ct_mat
-                    # msg = f'memory usage after freeing ct_mat: {proc.memory_info().rss/1024**2:.1f} MB'
-                    # print(msg)
                     shm.close()
                 else:
                     self.matrix = ct_mat
-    
-
-    # def load_small(self):
-    #     if self.save_file is not None:
-    #         if not self.sparse:
-    #             self.matrix = 
-    #             self.matrix = np.fromfile(self.save_file, dypte=np.uint16)
-
 
     def complete(self,verbose=False):
         """a np.unique is performed on self.ints and the number of occurences for each unique 17mer (clipped to 2^16-1) is recorded in a sparse array self.matrix"""
@@ -438,6 +423,10 @@ class pb_reports_class:
             self.computeOTmaps()
             self.compute_pb_report()
 
+    def log_and_print(self, msg, level=logging.INFO):
+        print_if_verbose(msg, self.verbose)
+        log_message(msg, self.logger)
+
     def __str__(self):
         _info_str = f"""
 Probe designer derived from Bogdan Bintu:
@@ -495,9 +484,7 @@ Key information:
 
         msg = f"-- setting attribute: {map_key}"
         _start_time = time.time()
-        log_and_print(msg, self.verbose, self.logger)
-
-
+        self.log_and_print(msg)
 
         # internalize variables    
         files = curr_dic.get('file',None)
@@ -560,12 +547,12 @@ Key information:
             print(f"No files provided for {map_key}")
             setattr(self,map_key,[constant_zero_dict()])
         msg = f"--- finish {map_key} in {time.time()-_start_time:.3f}s."
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
 
     def release_OTmaps(self):
         msg = f'Releasing all OTmaps...'
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
         start = time.time()
         for key in list(self.map_dic.keys()):
@@ -581,8 +568,8 @@ Key information:
                                 shm.close()
                                 shm.unlink()
                     delattr(self, _map_key)
-        msg = "Time to release OTmaps: {time.time()-start:.3f}s. "
-        log_and_print(msg, self.verbose, self.logger)
+        msg = f"Time to release OTmaps: {time.time()-start:.3f}s. "
+        self.log_and_print(msg)
 
 
     def release_self_sequences_OTmap(self):
@@ -592,25 +579,25 @@ Key information:
             delattr(self, selfseq_map_key)
         else:
             msg = 'No self_sequences OTmap to release.'
-            log_and_print(msg, self.verbose, self.logger)
+            self.log_and_print(msg)
 
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
     def compute_pb_report_region(self, reg_id, name, seq, file, block, pb_len, input_rev_com, input_two_stranded, map_keys=None, savefile=None):
         if savefile is not None and os.path.exists(savefile):
-            log_and_print(f'File {savefile} already exists. Skip computation...', self.verbose, self.logger)
+            self.log_and_print(f'File {savefile} already exists. Skip computation...')
             return
 
         pb_report_region = {}
 
         msg = f"-- designing region: {name} with map_keys: {map_keys}"
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
         _design_start = time.time()
 
 
         if len(seq) <= pb_len:
             msg = f"Too short the sequence, skip."
-            log_and_print(msg, self.verbose, self.logger)
+            self.log_and_print(msg)
 
 
             return {}
@@ -618,7 +605,7 @@ Key information:
         _input_map_dic = {_k:_v for _k,_v in self.map_dic['self_sequences'].items()}
         _input_map_dic['file'] = file
         msg = f"-- region: {reg_id}, input file: {_input_map_dic['file']}"
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
 
         if map_keys is None or 'self_sequences' in map_keys:
@@ -626,11 +613,6 @@ Key information:
         _num_candidate_probes = 0
         # loop through all possible positions
         for _i in range(len(seq)-pb_len+1):
-
-            # msg = f'Current memory usage: {proc.memory_info().rss/1024**2:.1f} MB'
-            # if self.verbose:
-            #     print(msg)
-            # log_message(msg, self.logger)
 
             # extract sequence
             _cand_seq = seq[_i:_i+pb_len]
@@ -739,8 +721,7 @@ Key information:
                                     pb_report_region[_rc_cand_seq][_map_key]+= _map.get(seqrc(_blk))
         
         msg = f"- Designed {_num_candidate_probes} candidate probes in {time.time()-_design_start:.3f}s."
-        log_and_print(msg, self.verbose, self.logger)
-
+        self.log_and_print(msg)
 
         if 'self_sequences' in map_keys:
             self.release_self_sequences_OTmap()
@@ -757,12 +738,11 @@ Key information:
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
 
         msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
-        log_and_print(msg, self.verbose, self.logger)
+        log_and_print(msg)
 
         if save_fileid is None:
             save_fileid = filename_without_ext(self.save_file)
 
-        # reg_ids = list(range(len(self.input_seqs)))
         reg_ids = [get_regid_from_filename(fname) for fname in self.input_files]
 
         num_regions_completed = 0
@@ -772,8 +752,6 @@ Key information:
 
             with ProcessPoolExecutor(max_workers=max_workers) as exe:
                 for i in range(0, len(self.input_seqs), batch_size):
-                    # pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
-                    #                                repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
                     pb_reports_futures = [exe.submit(self.compute_pb_report_region, reg_id, name, seq, file,
                                                 block, pb_len, input_rev_com, input_two_stranded, map_keys=map_keys, savefile=savefile)
                                                 for reg_id, name, seq, file, savefile in zip(reg_ids[i:i+batch_size], self.input_names[i:i+batch_size],
@@ -781,67 +759,51 @@ Key information:
                                                                                    savefiles[i:i+batch_size])]
 
                     
-                    # for fut in tqdm(as_completed(pb_reports_futures), total=len(pb_reports_futures)):
                     try:
                         for fut in as_completed(pb_reports_futures):
                             result = fut.result()
                             if result is None:
-                                log_and_print(f'Child process returned None. Skip saving...', self.verbose, self.logger)
+                                self.log_and_print(f'Child process returned None. Skip saving...')
                                 continue
-                            log_and_print('Result has been returned.', self.verbose, self.logger, level=logging.DEBUG)
+                            self.log_and_print('Result has been returned.', level=logging.DEBUG)
                             save_start = time.time()
                             result_name = result[list(result.keys())[0]]['reg_name']
                             result_regid = result[list(result.keys())[0]]['reg_index']
                             result_savefile = f'{os.path.join(os.path.dirname(self.save_file), save_fileid)}_regid{result_regid}.pkl'
                             msg = f'Child process finished for region {result_name} with reg_id {result_regid}'
-                            log_and_print(msg, self.verbose, self.logger)
+                            self.log_and_print(msg)
 
                             if not os.path.exists(result_savefile):
                                 pickle.dump(result, open(result_savefile,'wb'))
+                                msg = f"Completed region {result_name} with reg_id {result_regid}. Saved file {result_savefile} in {time.time()-save_start:.3f}s"
+                                self.log_and_print(msg)
                             else:
-                                log_and_print(f'Tried to overwrite file {result_savefile}! This line should not be logged!')
-
-                            msg = f"Completed region {result_name} with reg_id {result_regid}. Saved file {result_savefile} in {time.time()-save_start:.3f}s"
-                            log_and_print(msg, self.verbose, self.logger)
+                                self.log_and_print(f'Tried to overwrite file {result_savefile}! This line should not be logged!')
 
                             num_regions_completed += 1
                     except Exception as err:
-                        log_and_print(str(err), self.verbose, self.logger, level=logging.DEBUG)
+                         self.log_and_print(str(err), level=logging.DEBUG)
 
         else:
             # iterate across multiple regions (input seqs)
             for _reg_id, _name, _seq, _file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files):
+                savefile = f'{os.path.join(os.path.dirname(self.save_file), save_fileid)}_regid{_reg_id}.pkl'
+
                 pb_report_region = self.compute_pb_report_region(_reg_id, _name, _seq, _file,
                                                                 block, pb_len, input_rev_com, input_two_stranded,
-                                                                map_keys=map_keys)
+                                                                map_keys=map_keys, savefile=savefile)
                 save_start = time.time()
-                result_name = pb_report_region[list(pb_report_region.keys())[0]]['reg_name']
-                result_regid = pb_report_region[list(pb_report_region.keys())[0]]['reg_index']
-                result_savefile = f'{os.path.splitext(self.save_file)[0]}_regid{result_regid}.pkl'
-                print(f'DONE: Completed region {result_name} with reg_id {result_regid}')
-
-                pickle.dump(result, open(result_savefile,'wb'))
-
-                msg = f"Completed region {result_name} with reg_id {result_regid}. Saved file {result_savefile} in {time.time()-save_start:.3f}s"
-                log_and_print(msg, self.verbose, self.logger)
-
-
-                num_regions_completed += 1
+                print(f'DONE: Completed region {_name} with reg_id {_reg_id}')
+                if not os.path.exists(savefile):
+                    pickle.dump(pb_report_region, open(savefile,'wb'))
+                    msg = f"Completed region {_name} with reg_id {_reg_id}. Saved file {savefile} in {time.time()-save_start:.3f}s"
+                    self.log_and_print(msg)
+                    num_regions_completed += 1
+                else:
+                    self.log_and_print(f'Skipping {savefile}...')
 
         msg = f"- Total candidate probes designed: {num_regions_completed}"
-        log_and_print(msg, self.verbose, self.logger)
-
-
-
-    # def compute_pb_report_small(self, parallel=False, max_workers=None, use_logging=False):
-    #     '''
-    #     This function tests shared memory using a small random arrays instead of loading countTables.
-    #     '''
-    #     if parallel:
-    #         pb_reports_list = []
-    #         with ProcessPoolExecutor(max_workers=max_workers) as exe:
-    #             pass
-
+        self.log_and_print(msg)
 
     def compute_pb_report(self, parallel=False, max_workers=None, map_keys=None, update=False):
         block = self.params_dic['word_size']
@@ -852,13 +814,8 @@ Key information:
         input_two_stranded = self.sequence_dic.get('two_stranded',False)
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
 
-        # if update:
-        #     pb_reports = self.cand_probes
-        # else:
-        #     pb_reports = None
-
         msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
 
 
@@ -866,25 +823,16 @@ Key information:
         pb_reports_list = []
         if parallel:
             with ProcessPoolExecutor(max_workers=max_workers) as exe:
-                # pb_reports_list = list(exe.map(self.compute_pb_report_region, reg_ids, self.input_names, self.input_seqs, self.input_files,
-                #                                repeat(block), repeat(pb_len), repeat(input_rev_com), repeat(input_two_stranded)))
                 pb_reports_futures = [exe.submit(self.compute_pb_report_region, reg_id, name, seq, file,
                                               block, pb_len, input_rev_com, input_two_stranded, map_keys=map_keys)
                                               for reg_id, name, seq, file in zip(reg_ids, self.input_names, self.input_seqs, self.input_files)]
 
-                
-                # for fut in tqdm(as_completed(pb_reports_futures), total=len(pb_reports_futures)):
                 for fut in as_completed(pb_reports_futures):
-
                     result = fut.result()
-                    # print(result)
-                    # print(f"Result keys: {list(result.keys())}")
                     result_name = result[list(result.keys())[0]]['reg_name']
                     result_regid = result[list(result.keys())[0]]['reg_index']
-                    print(f'DONE: Completed region {result_name} with reg_id {result_regid}')
                     msg = f"Completed region {result_name} with reg_id {result_regid}"
-                    log_and_print(msg, self.verbose, self.logger)
-
+                    self.log_and_print(msg)
                     pb_reports_list.append(result)
         else:
             # iterate across multiple regions (input seqs)
@@ -896,9 +844,6 @@ Key information:
         
         pb_reports = {k:v for d in pb_reports_list for k, v in d.items()} # TODO: Check for collisions!
 
-
-
-
         if update:
             for cand_seq in pb_reports.keys():
                 for map_key in pb_reports[cand_seq].keys():
@@ -909,9 +854,8 @@ Key information:
         # save
         self.save_to_file()
 
-
         msg = f"- Total candidate probes designed: {len(pb_reports)}"
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
         
         # msg = f'Unique candidate probe keys: {np.unique(np.array(list(pb_reports.keys()))).size}'
         # print(msg)
@@ -920,7 +864,7 @@ Key information:
     def merge_pb_reports(self, save_fileids):
         map_keys =  list(self.map_dic.keys())
         pb_reports = {}
-        reg_ids = list(range(len(self.input_seqs)))
+        reg_ids = [get_regid_from_filename(fname) for fname in self.input_files]
         for reg_id in reg_ids:
             for save_fileid in save_fileids:
                 pbr_filename = f'{os.path.join(os.path.dirname(self.save_file), save_fileid)}_regid{reg_id}.pkl'
@@ -938,12 +882,12 @@ Key information:
         self.cand_probes = pb_reports
 
         msg = f'Merged {len(self.input_seqs)} region probe reports into one large probe report on keys {map_keys}. Saving file {self.save_file}...'
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
         self.save_to_file()
 
         msg = f'Successfully saved'
-        log_and_print(msg, self.verbose, self.logger)
+        self.log_and_print(msg)
 
 
 
