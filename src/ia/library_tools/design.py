@@ -37,9 +37,9 @@ def log_message(msg, logger, level=logging.INFO):
         logger.log(level, msg)
 
 
-def log_and_print(msg, verbose, logger, level=logging.INFO):
-    print_if_verbose(msg, verbose)
-    log_message(msg, logger)
+# def log_and_print(msg, verbose, logger, level=logging.INFO):
+#     print_if_verbose(msg, verbose)
+#     log_message(msg, logger)
 
 def filename_without_ext(path):
     return os.path.splitext(os.path.basename(path))[0]
@@ -71,7 +71,8 @@ def tm(string):
 def gc(string):
     if isinstance(string, bytes):
         string = string.decode()
-    return gc_fraction(string) / 100.
+    # return gc_fraction(string) / 100. # NOTE: Old behavior of gc_fraction returned a percentage
+    return gc_fraction(string)
 
 def str_to_list(var):
     "Converst a string to a list"
@@ -339,8 +340,9 @@ def OTmap(seqs,word_size=17,use_kmer=True,progress_report=False,save_file=None,s
         specTable = OTTable()
         map_ = specTable.computeOTTable(seqs,word_size,progress_report=progress_report)
 
-        if save_file is not None:
-            pickle.dump(map_,open(save_file,'wb'),protocol=pickle.HIGHEST_PROTOCOL)
+        if save_file is not None:                                
+            with open(save_file, 'wb') as f:
+                pickle.dump(map_, f, protocol=pickle.HIGHEST_PROTOCOL)
     return map_
 
 
@@ -774,7 +776,8 @@ Key information:
                             self.log_and_print(msg)
 
                             if not os.path.exists(result_savefile):
-                                pickle.dump(result, open(result_savefile,'wb'))
+                                with open(result_savefile, 'wb') as f:
+                                    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
                                 msg = f"Completed region {result_name} with reg_id {result_regid}. Saved file {result_savefile} in {time.time()-save_start:.3f}s"
                                 self.log_and_print(msg)
                             else:
@@ -795,7 +798,8 @@ Key information:
                 save_start = time.time()
                 print(f'DONE: Completed region {_name} with reg_id {_reg_id}')
                 if not os.path.exists(savefile):
-                    pickle.dump(pb_report_region, open(savefile,'wb'))
+                    with open(savefile, 'wb'):
+                        pickle.dump(pb_report_region, f, protocol=pickle.HIGHEST_PROTOCOL)
                     msg = f"Completed region {_name} with reg_id {_reg_id}. Saved file {savefile} in {time.time()-save_start:.3f}s"
                     self.log_and_print(msg)
                     num_regions_completed += 1
@@ -911,10 +915,12 @@ Key information:
                            if _info['reg_index'] == _reg_id}
             _sel_reg_pb_dic = {}                           
             _pb_score_dict = {}
-            if self.verbose:
-                print(f"-- check region:{_reg_id} {_name}, {len(_reg_pb_dic)} candidate probes")
-                _check_start = time.time()
+            self.log_and_print(f"-- check region:{_reg_id} {_name}, {len(_reg_pb_dic)} candidate probes")
+            _check_start = time.time()
             # loop through probes
+
+            probe_failure_dict = constant_zero_dict()
+
             for _pb, _info in _reg_pb_dic.items():
                 # remove edge probes
                 _edge_size = int(max(self.buffer_len, 0))
@@ -924,10 +930,14 @@ Key information:
                 _check_gc, _check_tm = True, True
                 if 'gc' in  _check_dic:
                     if isinstance(_check_dic['gc'], list) or isinstance(_check_dic['gc'], tuple):
-                        if _info['gc'] > np.max(_check_dic['gc']) or _info['gc'] < np.min(_check_dic['gc']):
+                        # if _info['gc'] > np.max(_check_dic['gc']) or _info['gc'] < np.min(_check_dic['gc']):
+                        if _info['gc']*100 > np.max(_check_dic['gc']) or _info['gc']*100 < np.min(_check_dic['gc']): # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
+
                             _check_gc = False
                     else:
-                        if _info['gc'] < _check_dic['gc']:
+                        # if _info['gc'] < _check_dic['gc']:
+                        if _info['gc']*100 < _check_dic['gc']: # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
+
                             _check_gc = False
                 if 'tm' in _check_dic:
                     if isinstance(_check_dic['tm'], list) or isinstance(_check_dic['tm'], tuple):
@@ -936,7 +946,13 @@ Key information:
                     else:
                         if _info['tm'] < _check_dic['tm']:
                             _check_tm = False
+
+                if not _check_gc:
+                    probe_failure_dict['gc'] += 1
+                if not _check_tm:
+                    probe_failure_dict['tm'] += 1
                 if not _check_gc or not _check_tm:
+                    # self.log_and_print(f"{_info['tm']}, {_check_tm}, {_info['gc']}, {_check_gc}")
                     #print(_info['tm'], _check_tm, _info['gc'], _check_gc)
                     continue
                 # calculate mask
@@ -944,8 +960,11 @@ Key information:
                     # get existence
                     _mask_exists = [find_sub_sequence(_pb, _str) for _str in _check_dic['masks']]
                     if np.sum(_mask_exists) > 0:
+                        probe_failure_dict['masks'] += 1
+                        self.log_and_print(f"mask {_mask_exists}")
                         # skip this probe if masked
                         #print(f"mask {_mask_exists}")
+
                         continue
                 # calculate map values
                 _map_score_dict = {}
@@ -958,6 +977,8 @@ Key information:
 
                             if _pb_map_value > _thres:
                                 _map_check = False
+                                probe_failure_dict[_check_key] += 1
+                                # self.log_and_print(f'Probe failed on {_check_key} filter, with counts {_pb_map_value} > {_thres} threshold')
                                 break 
                             else:
                                 # zero hit with non-zero threshold
@@ -976,6 +997,8 @@ Key information:
 
                             if _pb_map_value > _thres:
                                 _map_check = False
+                                probe_failure_dict[_check_key[0]] += 1
+                                # self.log_and_print(f'Probe failed on {_check_key[0]} filter, with counts above self_sequences {_pb_map_value} > {_thres} threshold')
                                 break 
                             else:
                                 # zero hit with non-zero threshold
@@ -998,11 +1021,10 @@ Key information:
                     _pb_score_dict[_pb] = _pb_score
                     #_pb_score_dict[_pb] = _map_score_dict # debug
                 
-            if self.verbose:
-                print(f"--- {len(_sel_reg_pb_dic)} probes passed check_dic selection.")
+            self.log_and_print(f"--- {len(_sel_reg_pb_dic)} probes passed check_dic selection.")    
                 
             # initialize kept flag (for two-strands)
-            _kept_flags = -1 * np.ones([2, len(_seq)], dtype=np.int)
+            _kept_flags = -1 * np.ones([2, len(_seq)], dtype=np.int32)
             _kept_pbs = []
             if pick_probe_by_hits:
                 ## after calculating all scores, selecte the best probes
@@ -1042,9 +1064,9 @@ Key information:
                             _kept_pbs.append(_pb)
                             # update the kept_flags
                             _kept_flags[_strand, _start:_end] = _pb_score_dict[_pb]
+                            self.log_and_print(f'Added probe {_pb} to kept probes list')
 
-                if self.verbose:
-                    print(f"finish in {time.time()-_check_start:.3f}s, {len(_kept_pbs)} probes kept.")
+                self.log_and_print(f"finish in {time.time()-_check_start:.3f}s, {len(_kept_pbs)} probes kept.")
                 # update kept_probes
                 _kept_pb_indices = np.array([_sel_reg_pb_dic[_pb]['pb_index'] for _pb in _kept_pbs])
             else:
@@ -1068,8 +1090,7 @@ Key information:
                         # update the kept_flags
                         _kept_flags[_strand, _start:_end] = _pb_score_dict[_pb]
 
-                if self.verbose:
-                    print(f"finish in {time.time()-_check_start:.3f}s, {len(_kept_pbs)} probes kept.")
+                self.log_and_print(f"finish in {time.time()-_check_start:.3f}s, {len(_kept_pbs)} probes kept.")
                 # update kept_probes
                 _kept_pb_indices = np.array([_sel_reg_pb_dic[_pb]['pb_index'] for _pb in _kept_pbs])
 
@@ -1077,6 +1098,7 @@ Key information:
             self.kept_probes.update(
                 {_pb:_sel_reg_pb_dic[_pb] for _pb in np.array(_kept_pbs)[np.argsort(_kept_pb_indices)] }
                 )
+            self.log_and_print(f'Number of probes failing on each check: {probe_failure_dict}')
 
         return _sel_reg_pb_dic, _pb_score_dict
 
@@ -1130,7 +1152,8 @@ Key information:
                         'check_dic':self.check_dic,
                         'save_file':self.save_file}
             # save
-            pickle.dump(dic_save,open(self.save_file,'wb'))
+            with open(self.save_file, 'wb') as f:
+                pickle.dump(dic_save, f, protocol=pickle.HIGHEST_PROTOCOL)
         else:
             if self.verbose:
                 print(f"- Fail to save into file: {filename}, invalid directory.")
