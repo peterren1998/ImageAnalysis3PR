@@ -747,7 +747,7 @@ Key information:
         #input_use_kmer = self.sequence_dic.get('use_kmer', True)
 
         msg = f"- Designing targeting sequence for {len(self.input_seqs)} regions"
-        log_and_print(msg)
+        self.log_and_print(msg)
 
         if save_fileid is None:
             save_fileid = filename_without_ext(self.save_file)

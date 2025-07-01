@@ -301,7 +301,7 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     save=True, save_name='candidate_probes.fasta', save_folder=None,
                     overwrite=True, verbose=True,
                     readout_summary_save_name='readout_summary.pkl',
-                    two_of_three_readouts_per_probe=False):
+                    two_of_three_unique_per_probe=False):
     """Function to Assemble_probes by given probe_soruce, gene_readout_dict, readout_dict and primers,
     Inputs:
         library_folder: path to the library, str of path
@@ -325,10 +325,10 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
         cand_probes: list of probes that assembled, list of SeqRecords
         readout_summary: summary dict of readout used in every region, dict of str -> list
     """
-    if unique_readout_per_probe and two_of_three_readouts_per_probe:
-        raise ValueError(f'unique_readout_per_probe and two_of_three_readouts_per_probe cannot both be True')
-    elif num_readout_per_probe != 3 and two_of_three_readouts_per_probe:
-        raise ValueError('num_readout_per_probe must be 3 when two_of_three_readouts_per_probe is True')
+    if unique_readout_per_probe and two_of_three_unique_per_probe:
+        raise ValueError(f'unique_readout_per_probe and two_of_three_unique_per_probe cannot both be True')
+    elif num_readout_per_probe != 3 and two_of_three_unique_per_probe:
+        raise ValueError('num_readout_per_probe must be 3 when two_of_three_unique_per_probe is True')
     ## Check inputs
     if verbose:
         print(f"- Assemble probes by given target sequences, readouts and primers.")
@@ -392,7 +392,7 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
         _reg_readout_info = gene_readout_dict[_reg_name]
         _reg_readouts = []
         _reg_readout_names = []
-        if two_of_three_readouts_per_probe: # NOTE: This code assumes that _num_readouts=3
+        if two_of_three_unique_per_probe: # NOTE: This code assumes that _num_readouts=3
             readout_combo_idxs = list(itertools.combinations(np.arange(len(_reg_readout_info)), 2))
             readout_combo_idxs = readout_combo_idxs + [(b, a) for (a,b) in readout_combo_idxs] # switch order of readouts
         for _mk in _reg_readout_info:
@@ -438,7 +438,7 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     if _unique_readout_pb:
                         _pb_readouts = [_reg_readouts[_i%len(_reg_readouts)]] * _num_readouts
                         _pb_readout_names = [_reg_readout_names[_i%len(_reg_readouts)]] * _num_readouts
-                    elif two_of_three_readouts_per_probe:
+                    elif two_of_three_unique_per_probe:
                         chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)] 
                         chosen_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
                         chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
@@ -482,7 +482,7 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     if _unique_readout_pb:
                         _pb_readouts = [_reg_readouts[_i%len(_reg_readouts)]] * _num_readouts
                         _pb_readout_names = [_reg_readout_names[_i%len(_reg_readouts)]] * _num_readouts
-                    elif two_of_three_readouts_per_probe:
+                    elif two_of_three_unique_per_probe:
                         chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)]
                         chosen_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
                         chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
