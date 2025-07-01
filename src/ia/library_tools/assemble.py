@@ -1,6 +1,7 @@
 import os, glob, sys, time
 import pickle
 import numpy as np
+import itertools
 
 # biopython
 from Bio import SeqIO
@@ -165,7 +166,7 @@ def Screen_probe_against_fasta(report_folder, ref_fasta, word_size=17, allowed_h
 
 # load
 def load_readouts(_num_readouts, _type='NDB', _num_colors=3, _start_channel=0, 
-                  _readout_folder=_readout_folder, _start_id=0, _verbose=True):
+                  _readout_folder=_readout_folder, _start_id=0, _verbose=True, exclude=[]):
     """Function to load readouts into a list"""
     # based on types, generate re
     import re
@@ -199,6 +200,16 @@ def load_readouts(_num_readouts, _type='NDB', _num_colors=3, _start_channel=0,
     # sort and save
     _selected_list = []
     while len(_selected_list) < _num_readouts:
+        readout_set_id = len(_selected_list) % _num_colors
+        cur_readout = _multi_readout_lists[readout_set_id][0]
+        # print(cur_readout)
+        # print(f'{len(_multi_readout_lists[readout_set_id])} readouts left in readout set {readout_set_id}')
+
+        if cur_readout.id in exclude:
+            if _verbose:
+                _multi_readout_lists[len(_selected_list) % _num_colors].pop(0)
+                print(f'Excluding {cur_readout.id}')
+            continue
         _selected_list.append(
             _multi_readout_lists[len(_selected_list) % _num_colors].pop(0))
     # return
@@ -288,7 +299,9 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     primer_len=20, readout_len=20, target_len=42,
                     num_readout_per_probe=None, unique_readout_per_probe=False,
                     save=True, save_name='candidate_probes.fasta', save_folder=None,
-                    overwrite=True, verbose=True):
+                    overwrite=True, verbose=True,
+                    readout_summary_save_name='readout_summary.pkl',
+                    two_of_three_readouts_per_probe=False):
     """Function to Assemble_probes by given probe_soruce, gene_readout_dict, readout_dict and primers,
     Inputs:
         library_folder: path to the library, str of path
@@ -312,6 +325,10 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
         cand_probes: list of probes that assembled, list of SeqRecords
         readout_summary: summary dict of readout used in every region, dict of str -> list
     """
+    if unique_readout_per_probe and two_of_three_readouts_per_probe:
+        raise ValueError(f'unique_readout_per_probe and two_of_three_readouts_per_probe cannot both be True')
+    elif num_readout_per_probe != 3 and two_of_three_readouts_per_probe:
+        raise ValueError('num_readout_per_probe must be 3 when two_of_three_readouts_per_probe is True')
     ## Check inputs
     if verbose:
         print(f"- Assemble probes by given target sequences, readouts and primers.")
@@ -370,10 +387,14 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                             for _reg_name in _pb_dict} for _t in _readout_types}
     # primers shared by the library
     fwd_primer, rev_primer = primers
+
     for _reg_name, _pb_obj in _pb_dict.items():
         _reg_readout_info = gene_readout_dict[_reg_name]
         _reg_readouts = []
         _reg_readout_names = []
+        if two_of_three_readouts_per_probe: # NOTE: This code assumes that _num_readouts=3
+            readout_combo_idxs = list(itertools.combinations(np.arange(len(_reg_readout_info)), 2))
+            readout_combo_idxs = readout_combo_idxs + [(b, a) for (a,b) in readout_combo_idxs] # switch order of readouts
         for _mk in _reg_readout_info:
             _type = _mk[0]
             _ind = int(_mk[1:])
@@ -417,6 +438,15 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     if _unique_readout_pb:
                         _pb_readouts = [_reg_readouts[_i%len(_reg_readouts)]] * _num_readouts
                         _pb_readout_names = [_reg_readout_names[_i%len(_reg_readouts)]] * _num_readouts
+                    elif two_of_three_readouts_per_probe:
+                        chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)] 
+                        chosen_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
+                        chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
+                        _pb_readouts = [chosen_readouts[0], chosen_readouts[(_i//len(readout_combo_idxs))%2], chosen_readouts[((_i//len(readout_combo_idxs))%2+1)%2]] # NOTE: This code assumes _num_readouts=3
+                        _pb_readout_names = [chosen_probe_names[0], chosen_probe_names[(_i//len(readout_combo_idxs))%2], chosen_probe_names[((_i//len(readout_combo_idxs))%2+1)%2]]
+                        # print(_reg_readout_names)
+                        # print(chosen_readout_idxs)
+                        # print(_pb_readout_names)
                     else:
                         _pb_readouts = [_rd for _j, _rd in enumerate(_reg_readouts) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
                         _pb_readout_names = [_name for _j, _name in enumerate(_reg_readout_names) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
@@ -452,6 +482,13 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     if _unique_readout_pb:
                         _pb_readouts = [_reg_readouts[_i%len(_reg_readouts)]] * _num_readouts
                         _pb_readout_names = [_reg_readout_names[_i%len(_reg_readouts)]] * _num_readouts
+                    elif two_of_three_readouts_per_probe:
+                        chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)]
+                        chosen_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
+                        chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
+                        _pb_readouts = [chosen_readouts[0], chosen_readouts[_i%2], chosen_readouts[(_i%2+1)%2]] # NOTE: This code assumes _num_readouts=3
+                        _pb_readout_names = [chosen_probe_names[0], chosen_probe_names[_i%2], chosen_probe_names[(_i%2+1)%2]]
+
                     else:
                         _pb_readouts = [_rd for _j, _rd in enumerate(_reg_readouts) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
                         _pb_readout_names = [_name for _j, _name in enumerate(_reg_readout_names) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
@@ -481,7 +518,7 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                 SeqIO.write(cand_probes, _output_handle, "fasta")
             # save readout_summary, coupled with save_filename
             _readout_summary_filename = os.path.join(
-                save_folder, 'readout_summary.pkl')
+                save_folder, readout_summary_save_name)
             if verbose:
                 print(
                     f"-- saving readout_summary into file:{_readout_summary_filename}")

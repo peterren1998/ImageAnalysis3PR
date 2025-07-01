@@ -44,11 +44,18 @@ def log_message(msg, logger, level=logging.INFO):
 def filename_without_ext(path):
     return os.path.splitext(os.path.basename(path))[0]
 
+# NOTE: regid here refers to its "new" definition, being the same as the "gene number" for each region.
 def get_regid_from_filename(fname):
     sequence_folder = os.path.dirname(fname)
     regex_str = os.path.join(sequence_folder, r'(\d+)-seg-0.fasta')
     pattern = re.compile(regex_str)
     m = pattern.match(fname)
+    return int(m.group(1))
+
+def get_regid_from_regname(regname):
+    regex_str = '[\dXY]+\:\d+-\d+_strand_[\+,-]_gene_(\d+)$'
+    pattern = re.compile(regex_str)
+    m = pattern.match(regname)
     return int(m.group(1))
 
 def release_shared_memory(name):
@@ -907,8 +914,10 @@ Key information:
         if not hasattr(self, 'kept_probes'):
             setattr(self, 'kept_probes', {})
 
+        regids = [get_regid_from_regname(regname) for regname in self.input_names]
+
         # iterate across multiple regions (input seqs)
-        for _reg_id, (_name, _seq, _file) in enumerate(zip(self.input_names, self.input_seqs, self.input_files)):
+        for _reg_id, _name, _seq, _file in zip(regids, self.input_names, self.input_seqs, self.input_files):
 
             # select probes belongs to this region
             _reg_pb_dic = {_pb:_info for _pb, _info in _cand_probes.items()
