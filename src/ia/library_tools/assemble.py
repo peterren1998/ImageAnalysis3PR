@@ -444,9 +444,6 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                         chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
                         _pb_readouts = [chosen_readouts[0], chosen_readouts[(_i//len(readout_combo_idxs))%2], chosen_readouts[((_i//len(readout_combo_idxs))%2+1)%2]] # NOTE: This code assumes _num_readouts=3
                         _pb_readout_names = [chosen_probe_names[0], chosen_probe_names[(_i//len(readout_combo_idxs))%2], chosen_probe_names[((_i//len(readout_combo_idxs))%2+1)%2]]
-                        # print(_reg_readout_names)
-                        # print(chosen_readout_idxs)
-                        # print(_pb_readout_names)
                     else:
                         _pb_readouts = [_rd for _j, _rd in enumerate(_reg_readouts) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
                         _pb_readout_names = [_name for _j, _name in enumerate(_reg_readout_names) if (_j+_i)%len(_reg_readouts) < _num_readouts ]

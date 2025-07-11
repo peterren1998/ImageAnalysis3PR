@@ -27,7 +27,6 @@ from .LibraryTools import OTTable
 # logging setup
 import logging
 
-
 def print_if_verbose(msg, verbose):
     if verbose:
         print(msg)
@@ -57,6 +56,12 @@ def get_regid_from_regname(regname):
     pattern = re.compile(regex_str)
     m = pattern.match(regname)
     return int(m.group(1))
+
+def get_regid_from_regname_alt(regname):
+    return int(regname.split('gene_')[1].split('_')[0])
+
+def get_probe_position_in_region(probe_record):
+    return int(probe_record.id.split('pos_')[1].split('_')[0])
 
 def release_shared_memory(name):
     """Release shared memory block with the given name."""
