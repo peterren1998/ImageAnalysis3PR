@@ -248,15 +248,15 @@ def _assemble_single_probe(_target, _readout_list, _fwd_primer, _rev_primer,
     # append half of readouts on 5'
     for _i in range(int(len(_readout_list)/2)):
         _seq += _readout_list[_i][-_readout_len:].reverse_complement()
-        _seq += _rand_seq_generator(_add_rand_gap)
+        _seq += _rand_seq_generator(_add_rand_gap, dna_alphabet=['A', 'T'])
     # append target region
     _seq += _target[-_target_len:]
-    _seq += _rand_seq_generator(_add_rand_gap)
+    _seq += _rand_seq_generator(_add_rand_gap, dna_alphabet=['A', 'T'])
     # append other half of readouts on 3'
     for _i in range(int(len(_readout_list)/2), len(_readout_list)):
         _seq += _readout_list[_i][-_readout_len:].reverse_complement()
         if _i < len(_readout_list)-1:
-            _seq += _rand_seq_generator(_add_rand_gap)
+            _seq += _rand_seq_generator(_add_rand_gap, dna_alphabet=['A', 'T'])
     # append reverse_complement
     _seq += _rev_primer[-_primer_len:].reverse_complement()
     _seq.description = ''
@@ -301,7 +301,9 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                     save=True, save_name='candidate_probes.fasta', save_folder=None,
                     overwrite=True, verbose=True,
                     readout_summary_save_name='readout_summary.pkl',
-                    two_of_three_unique_per_probe=False):
+                    two_of_three_unique_per_probe=False,
+                    choose_readout_combinations=False
+                    ):
     """Function to Assemble_probes by given probe_soruce, gene_readout_dict, readout_dict and primers,
     Inputs:
         library_folder: path to the library, str of path
@@ -395,6 +397,9 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
         if two_of_three_unique_per_probe: # NOTE: This code assumes that _num_readouts=3
             readout_combo_idxs = list(itertools.combinations(np.arange(len(_reg_readout_info)), 2))
             readout_combo_idxs = readout_combo_idxs + [(b, a) for (a,b) in readout_combo_idxs] # switch order of readouts
+        elif choose_readout_combinations:
+            readout_combo_idxs = list(itertools.combinations(np.arange(len(_reg_readout_info)), 2))
+            readout_combo_idxs = readout_combo_idxs + [(b, a) for (a,b) in readout_combo_idxs] # switch order of readouts
         for _mk in _reg_readout_info:
             _type = _mk[0]
             _ind = int(_mk[1:])
@@ -444,6 +449,10 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                         chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
                         _pb_readouts = [chosen_readouts[0], chosen_readouts[(_i//len(readout_combo_idxs))%2], chosen_readouts[((_i//len(readout_combo_idxs))%2+1)%2]] # NOTE: This code assumes _num_readouts=3
                         _pb_readout_names = [chosen_probe_names[0], chosen_probe_names[(_i//len(readout_combo_idxs))%2], chosen_probe_names[((_i//len(readout_combo_idxs))%2+1)%2]]
+                    elif choose_readout_combinations:
+                        chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)] 
+                        _pb_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
+                        _pb_readout_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
                     else:
                         _pb_readouts = [_rd for _j, _rd in enumerate(_reg_readouts) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
                         _pb_readout_names = [_name for _j, _name in enumerate(_reg_readout_names) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
@@ -485,7 +494,10 @@ def Assemble_probes(library_folder, probe_source, gene_readout_dict,
                         chosen_probe_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
                         _pb_readouts = [chosen_readouts[0], chosen_readouts[_i%2], chosen_readouts[(_i%2+1)%2]] # NOTE: This code assumes _num_readouts=3
                         _pb_readout_names = [chosen_probe_names[0], chosen_probe_names[_i%2], chosen_probe_names[(_i%2+1)%2]]
-
+                    elif choose_readout_combinations:
+                        chosen_readout_idxs = readout_combo_idxs[_i%len(readout_combo_idxs)] 
+                        _pb_readouts = [_reg_readouts[i] for i in chosen_readout_idxs]
+                        _pb_readout_names = [_reg_readout_names[i] for i in chosen_readout_idxs]
                     else:
                         _pb_readouts = [_rd for _j, _rd in enumerate(_reg_readouts) if (_j+_i)%len(_reg_readouts) < _num_readouts ]
                         _pb_readout_names = [_name for _j, _name in enumerate(_reg_readout_names) if (_j+_i)%len(_reg_readouts) < _num_readouts ]

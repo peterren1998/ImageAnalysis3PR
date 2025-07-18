@@ -808,9 +808,9 @@ Key information:
                                                                 block, pb_len, input_rev_com, input_two_stranded,
                                                                 map_keys=map_keys, savefile=savefile)
                 save_start = time.time()
-                print(f'DONE: Completed region {_name} with reg_id {_reg_id}')
+                self.log_and_print(f'DONE: Completed region {_name} with reg_id {_reg_id}')
                 if not os.path.exists(savefile):
-                    with open(savefile, 'wb'):
+                    with open(savefile, 'wb') as f:
                         pickle.dump(pb_report_region, f, protocol=pickle.HIGHEST_PROTOCOL)
                     msg = f"Completed region {_name} with reg_id {_reg_id}. Saved file {savefile} in {time.time()-save_start:.3f}s"
                     self.log_and_print(msg)
@@ -885,6 +885,7 @@ Key information:
             for save_fileid in save_fileids:
                 pbr_filename = f'{os.path.join(os.path.dirname(self.save_file), save_fileid)}_regid{reg_id}.pkl'
                 with open(pbr_filename, 'rb') as f:
+                    self.log_and_print(f'Loading {pbr_filename}...')
                     pb_report_region = pickle.load(f)
                     for cand_seq in pb_report_region.keys():
                         if cand_seq not in pb_reports:
@@ -945,12 +946,12 @@ Key information:
                 if 'gc' in  _check_dic:
                     if isinstance(_check_dic['gc'], list) or isinstance(_check_dic['gc'], tuple):
                         # if _info['gc'] > np.max(_check_dic['gc']) or _info['gc'] < np.min(_check_dic['gc']):
-                        if _info['gc']*100 > np.max(_check_dic['gc']) or _info['gc']*100 < np.min(_check_dic['gc']): # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
+                        if _info['gc'] > np.max(_check_dic['gc']) or _info['gc'] < np.min(_check_dic['gc']): # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
 
                             _check_gc = False
                     else:
                         # if _info['gc'] < _check_dic['gc']:
-                        if _info['gc']*100 < _check_dic['gc']: # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
+                        if _info['gc'] < _check_dic['gc']: # NOTE: Temporary adjustment with new gc_fraction calculation mixed with old code dividing by 100
 
                             _check_gc = False
                 if 'tm' in _check_dic:
@@ -966,7 +967,7 @@ Key information:
                 if not _check_tm:
                     probe_failure_dict['tm'] += 1
                 if not _check_gc or not _check_tm:
-                    # self.log_and_print(f"{_info['tm']}, {_check_tm}, {_info['gc']}, {_check_gc}")
+                    self.log_and_print(f"{_info['tm']}, {_check_tm}, {_info['gc']}, {_check_gc}")
                     #print(_info['tm'], _check_tm, _info['gc'], _check_gc)
                     continue
                 # calculate mask

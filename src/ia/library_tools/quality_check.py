@@ -400,7 +400,8 @@ def _check_between_probes(pb_records, int_map, _max_internal_hits=50,
     _kept_pb_records = []
     _removed_count = 0
     for record in pb_records:
-        target_seq = str(_parsing_probe_sequence(record, primer_len=primer_len, readout_len=readout_len, target_len=target_len)[0]).upper().encode()
+        target_seq = str(_parsing_probe_sequence(record, add_rand_gap=add_rand_gap, primer_len=primer_len,
+                                                 readout_len=readout_len, target_len=target_len)[0]).upper().encode()
         _rec_hits = int_map.get(target_seq) + int_map.get(target_seq, rc=True)
         _internal_hits.append(_rec_hits) 
         if _rec_hits <= _max_internal_hits:
