@@ -284,7 +284,7 @@ class Cell_List():
             _chosen_fovs = np.arange(len(_fovs))
         if len(_chosen_fovs) > 0: # there are specifications
             _chosen_fovs = [_i for _i in _chosen_fovs if _i <= len(_fovs)]
-            _chosen_fovs = list(np.array(np.unique(_chosen_fovs), dtype=np.int))
+            _chosen_fovs = list(np.array(np.unique(_chosen_fovs), dtype=np.int32))
         # exclude fovs
         if len(_exclude_fovs) > 0: #exclude any fov:
             for _i in _exclude_fovs:
@@ -292,7 +292,7 @@ class Cell_List():
                     _chosen_fovs.pop(_chosen_fovs.index(_i))
         # save values to the class
         self.fov_ids = _chosen_fovs
-        self.chosen_fovs = list(np.array(self.fovs)[np.array(self.fov_ids, dtype=np.int)])
+        self.chosen_fovs = list(np.array(self.fovs)[np.array(self.fov_ids, dtype=np.int32)])
         # read color-usage and encodding-scheme
         if not hasattr(self, 'color_dic') or not hasattr(self, 'channels'):
             self._load_color_info(_color_filename=_color_filename)
@@ -599,20 +599,20 @@ class Cell_List():
                         raise ValueError(
                             "Dimension of label and center doesn't match")
                     # convert format
-                    _center = np.array(_center, dtype=np.int)
-                    _radius = np.int(_radius)
+                    _center = np.array(_center, dtype=np.int32)
+                    _radius = np.int32(_radius)
                     # generate mask
                     _shape_lst = (list(range(_label.shape[i]))
                                 for i in range(len(_label.shape)))
                     _coord_lst = np.meshgrid(*_shape_lst, indexing='ij')
                     _dist = np.sqrt(np.sum(np.stack(
                         [(_coords - _ct)**2 for _coords, _ct in zip(_coord_lst, _center)]), axis=0))
-                    _new_mask = np.array(_dist <= _radius, dtype=np.int)
+                    _new_mask = np.array(_dist <= _radius, dtype=np.int32)
                     if not overwrite_marker:
-                        _new_mask *= np.array(_label <= 0, dtype=np.int)
+                        _new_mask *= np.array(_label <= 0, dtype=np.int32)
 
                     # check overlap percentage of new mask to previous ones
-                    _overlap = np.array(_new_mask * (_label > 0), dtype=np.int)
+                    _overlap = np.array(_new_mask * (_label > 0), dtype=np.int32)
 
                     if np.float(np.sum(_overlap)) / np.sum(_new_mask) > _overlap_percent / 100.0:
                         print(np.float(np.sum(_overlap)) / np.sum(_new_mask))
@@ -902,7 +902,7 @@ class Cell_List():
                                             overwrite=_force_drift, verbose=_verbose)
 
             # create cells in parallel
-            _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int)
+            _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
             if _verbose:
                 print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}")
             _params = [{'fov_id': _fov_id,
@@ -1971,7 +1971,7 @@ class Cell_List():
                     _color_medians = np.array(_color_medians)
                     _order = np.argsort(_color_medians)
                     # select 5 genes with lowest median
-                    _selected_inds = np.array(_inds, dtype=np.int)[_order[:min(len(_inds),_num_ref_species)]]
+                    _selected_inds = np.array(_inds, dtype=np.int32)[_order[:min(len(_inds),_num_ref_species)]]
                     _sel_ints = np.concatenate([_intensities[getattr(self.cells[0],_id_attr)[_j]] for _j in _selected_inds])
                     # do gaussian fitting for background peak
                     _mean, _std = stats.norm.fit(_sel_ints[_sel_ints<_gaussian_fitting_th])
@@ -2053,7 +2053,7 @@ class Cell_List():
                             _cell_id_pval = [[]for _cc in _spot_lst]
                             for _i, _spots in enumerate(_spot_lst):
                                 _ints = _spots[:,0]
-                                _flags = np.zeros(len(_ints), dtype=np.int)
+                                _flags = np.zeros(len(_ints), dtype=np.int32)
                                 if _ref_dist == 'gaussian':
                                     _z = (_ints - _param_dic[_id]['params'][0]) / _param_dic[_id]['params'][1]
                                     _p_vals = stats.norm.sf(_z) #one-sided 
@@ -2071,8 +2071,8 @@ class Cell_List():
                                              for _cc in getattr(_cell, 'chrom_coords')]
                             # _spot_list is not list, directly append false flags
                             for _i in range(len(getattr(_cell, 'chrom_coords'))):
-                                _cell_id_pval[_i].append(np.array([-1],dtype=np.int))
-                                _cell_pval_dics[_i][_id] = np.array([-1],dtype=np.int)
+                                _cell_id_pval[_i].append(np.array([-1],dtype=np.int32))
+                                _cell_pval_dics[_i][_id] = np.array([-1],dtype=np.int32)
                         # append cell_id_pval to _pval_flags_by_id
                         _pval_flags_by_id[_id].append(_cell_id_pval)
                 else:
@@ -3532,7 +3532,7 @@ class Cell_Data():
             # segmentation
             _seg_label = random_walker(_chrom_im, _label, beta=100, mode='bf')
             # keep object
-            _kept_label = -1 * np.ones(_seg_label.shape, dtype=np.int)
+            _kept_label = -1 * np.ones(_seg_label.shape, dtype=np.int32)
             _sizes = [np.sum(_seg_label==_j+1) for _j in range(np.max(_seg_label))]
             # re-label
             _label_ct = 1
@@ -3628,7 +3628,7 @@ class Cell_Data():
             if len(_ind_lst) == 0:
                 continue
             else:
-                _ind_lst = np.array(_ind_lst, dtype=np.int)
+                _ind_lst = np.array(_ind_lst, dtype=np.int32)
                 _ims_in_channel = _ims[_ind_lst]
                 if _function_type == 'median':
                     _backgrounds = np.nanmedian(_ims_in_channel, axis=0)
@@ -4106,7 +4106,7 @@ class Cell_Data():
                     if not np.isnan(_spot).any()]
                 _image_name_list.append(_im_names)
                 _sel_spot_list.append(np.array(_sel_spots))
-                _sel_ind_list.append(np.array(_sel_inds, dtype=np.int))
+                _sel_ind_list.append(np.array(_sel_inds, dtype=np.int32))
         # generate visualization items
         _vis_objs = []
         for _chrom_id, (_spots, _inds, _names) in enumerate(zip(_sel_spot_list, _sel_ind_list, _image_name_list)):

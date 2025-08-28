@@ -63,6 +63,12 @@ def get_regid_from_regname_alt(regname):
 def get_probe_position_in_region(probe_record):
     return int(probe_record.id.split('pos_')[1].split('_')[0])
 
+def get_pbid_in_region(probe_record):
+    return get_pbid_from_regname(probe_record.id)
+
+def get_pbid_from_regname(regname):
+    return int(regname.split('pb_')[1].split('_')[0])
+
 def release_shared_memory(name):
     """Release shared memory block with the given name."""
     try:

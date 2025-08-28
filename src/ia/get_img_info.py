@@ -14,6 +14,7 @@ def get_folders(master_folder, feature='H', verbose=True):
     given master_folder directory
         feature: 'H' for hybes, 'B' for beads
     returns folders, field_of_views'''
+
     folders = [folder for folder in glob.glob(master_folder+os.sep+'*') if os.path.basename(folder)[0]==feature] # get folders start with 'H'
     #for __name in sorted(__color_dic.keys(), key=lambda _v:int( re.split(r'^H([0-9]+)[RQBUGCMPL](.*)', _v)[1] ) ):
     # try sort folder by hyb
