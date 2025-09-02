@@ -93,21 +93,21 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     # check coord_sel
     if coord_sel is None:
         coord_sel = np.array(
-            [int(single_im_size[-2]/2), int(single_im_size[-1]/2)], dtype=np.int)
+            [int(single_im_size[-2]/2), int(single_im_size[-1]/2)], dtype=np.int32)
     else:
-        coord_sel = np.array(coord_sel, dtype=np.int)
+        coord_sel = np.array(coord_sel, dtype=np.int32)
     # collect crop coordinates (slices)
     crop0 = np.array([[0, single_im_size[0]],
                       [max(coord_sel[-2]-drift_size, 0), coord_sel[-2]],
-                      [max(coord_sel[-1]-drift_size, 0), coord_sel[-1]]], dtype=np.int)
+                      [max(coord_sel[-1]-drift_size, 0), coord_sel[-1]]], dtype=np.int32)
     crop1 = np.array([[0, single_im_size[0]],
                       [coord_sel[-2], min(coord_sel[-2] +
                                           drift_size, single_im_size[-2])],
-                      [coord_sel[-1], min(coord_sel[-1]+drift_size, single_im_size[-1])]], dtype=np.int)
+                      [coord_sel[-1], min(coord_sel[-1]+drift_size, single_im_size[-1])]], dtype=np.int32)
     crop2 = np.array([[0, single_im_size[0]],
                       [coord_sel[-2], min(coord_sel[-2] +
                                           drift_size, single_im_size[-2])],
-                      [max(coord_sel[-1]-drift_size, 0), coord_sel[-1]]], dtype=np.int)
+                      [max(coord_sel[-1]-drift_size, 0), coord_sel[-1]]], dtype=np.int32)
     # merge into one array which is easier to feed into function
     selected_crops = np.stack([crop0, crop1, crop2])
     
@@ -319,8 +319,8 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
         raise IOError(
             f"Illumination correction profile file:{ic_filename} doesn't exist, exit!")
     # image shape and ref-shape
-    im_shape = np.array(im.shape, dtype=np.int)
-    single_im_size = np.array(single_im_size, dtype=np.int)
+    im_shape = np.array(im.shape, dtype=np.int32)
+    single_im_size = np.array(single_im_size, dtype=np.int32)
     # check crop_limits
     if crop_limits is None:
         if (im_shape[-2:]-single_im_size[-2:]).any():
@@ -328,14 +328,14 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
                 f"Test image is not of full image size:{single_im_size}, while crop_limits are not given, exit!")
         else:
             # change crop_limits into full image size
-            crop_limits = np.stack([np.zeros(3), im_shape]).T.astype(np.int)
+            crop_limits = np.stack([np.zeros(3), im_shape]).T.astype(np.int32)
     elif len(crop_limits) <= 1 or len(crop_limits) > 3:
         raise ValueError("crop_limits should have 2 or 3 elements")
     elif len(crop_limits) == 2:
         crop_limits = np.stack(
-            [np.array([0, im_shape[0]])] + list(crop_limits)).astype(np.int)
+            [np.array([0, im_shape[0]])] + list(crop_limits)).astype(np.int32)
     else:
-        crop_limits = np.array(crop_limits, dtype=np.int)
+        crop_limits = np.array(crop_limits, dtype=np.int32)
     # convert potential negative values to positive for further calculation
     for _s, _lims in zip(im_shape, crop_limits):
         if _lims[1] < 0:
@@ -417,8 +417,8 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
             f"Chromatic correction profile file:{cc_filename} doesn't exist, exit!")
     
     # image shape and ref-shape
-    im_shape = np.array(im.shape, dtype=np.int)
-    single_im_size = np.array(single_im_size, dtype=np.int)
+    im_shape = np.array(im.shape, dtype=np.int32)
+    single_im_size = np.array(single_im_size, dtype=np.int32)
 
     # check crop_limits
     if crop_limits is None:
@@ -432,9 +432,9 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
         raise ValueError("crop_limits should have 2 or 3 elements")
     elif len(crop_limits) == 2:
         crop_limits = np.stack(
-            [np.array([0, im_shape[0]])] + list(crop_limits)).astype(np.int)
+            [np.array([0, im_shape[0]])] + list(crop_limits)).astype(np.int32)
     else:
-        crop_limits = np.array(crop_limits, dtype=np.int)
+        crop_limits = np.array(crop_limits, dtype=np.int32)
     
     # convert potential negative values to positive for further calculation
     for _s, _lims in zip(im_shape, crop_limits):
@@ -725,17 +725,17 @@ def generate_chromatic_abbrevation_info(ca_filename, ref_filename, ca_channel, r
     if bead_channel not in all_channels:
         raise ValueError(f"bead_channel:{bead_channel} should be in all_channels:{all_channels}")
     if bead_coord_sel is None:
-        bead_coord_sel = np.array([single_im_size[-2]/2, single_im_size[-1]/2], dtype=np.int)
+        bead_coord_sel = np.array([single_im_size[-2]/2, single_im_size[-1]/2], dtype=np.int32)
     # collect crop coordinates (slices)
     crop0 = np.array([[0, single_im_size[0]],
                       [max(bead_coord_sel[-2]-bead_drift_size, 0), bead_coord_sel[-2]],
-                      [max(bead_coord_sel[-1]-bead_drift_size, 0), bead_coord_sel[-1]]], dtype=np.int)
+                      [max(bead_coord_sel[-1]-bead_drift_size, 0), bead_coord_sel[-1]]], dtype=np.int32)
     crop1 = np.array([[0, single_im_size[0]],
                       [bead_coord_sel[-2], min(bead_coord_sel[-2] + bead_drift_size, single_im_size[-2])],
-                      [bead_coord_sel[-1], min(bead_coord_sel[-1] + bead_drift_size, single_im_size[-1])]], dtype=np.int)
+                      [bead_coord_sel[-1], min(bead_coord_sel[-1] + bead_drift_size, single_im_size[-1])]], dtype=np.int32)
     crop2 = np.array([[0, single_im_size[0]],
                       [bead_coord_sel[-2], min(bead_coord_sel[-2] + bead_drift_size, single_im_size[-2])],
-                      [max(bead_coord_sel[-1] - bead_drift_size, 0), bead_coord_sel[-1]]], dtype=np.int)
+                      [max(bead_coord_sel[-1] - bead_drift_size, 0), bead_coord_sel[-1]]], dtype=np.int32)
     # merge into one array which is easier to feed into function
     selected_crops = np.stack([crop0, crop1, crop2])
 
@@ -811,16 +811,16 @@ def generate_chromatic_abbrevation_info(ca_filename, ref_filename, ca_channel, r
     for ct in aligned_ca_centers:
         if len(ct) != 3:
             raise ValueError(f"Wrong input dimension of centers, only expect [z,x,y] coordinates in center:{ct}")
-        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int).max(0)
+        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int32).max(0)
         crop_r = np.array([np.array(np.shape(ca_im)), 
-                           np.round(ct-_radius)+crop_window], dtype=np.int).min(0)
+                           np.round(ct-_radius)+crop_window], dtype=np.int32).min(0)
         cropped_cas.append(ca_im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]])
     for ct in aligned_ref_centers:
         if len(ct) != 3:
             raise ValueError(f"Wrong input dimension of centers, only expect [z,x,y] coordinates in center:{ct}")
-        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int).max(0)
+        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int32).max(0)
         crop_r = np.array([np.array(np.shape(ref_im)), 
-                           np.round(ct-_radius)+crop_window], dtype=np.int).min(0)
+                           np.round(ct-_radius)+crop_window], dtype=np.int32).min(0)
         cropped_refs.append(ref_im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]])
         
         
@@ -1192,15 +1192,15 @@ def _generate_bleedthrough_info_per_image(filename, ref_channel, bld_channel,
     for ct in sel_centers:
         if len(ct) != 3:
             raise ValueError(f"Wrong input dimension of centers, only expect [z,x,y] coordinates in center:{ct}")
-        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int).max(0)
+        crop_l = np.array([np.zeros(3), np.round(ct-_radius)], dtype=np.int32).max(0)
         crop_r = np.array([np.array(np.shape(ref_im)), 
-                           np.round(ct-_radius)+crop_window], dtype=np.int).min(0)
+                           np.round(ct-_radius)+crop_window], dtype=np.int32).min(0)
         cropped_refs.append(ref_im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]])
         cropped_blds.append(bld_im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]])
     # remove centers that too close to boundary
     sel_centers = list(sel_centers)
     for _i, (_rim, _bim, _ct) in enumerate(zip(cropped_refs, cropped_blds, sel_centers)):
-        if remove_boundary_pts and (_rim.shape-np.array([crop_window, crop_window, crop_window], dtype=np.int)).any():
+        if remove_boundary_pts and (_rim.shape-np.array([crop_window, crop_window, crop_window], dtype=np.int32)).any():
             # pop points at boundary
             cropped_refs.pop(_i)
             cropped_blds.pop(_i)
@@ -1539,7 +1539,7 @@ def Bleedthrough_correction(input_im, crop_limits=None, all_channels=_allowed_co
     # crop_limits:
     if crop_limits is None:
         crop_limits = np.array([np.zeros(len(single_im_size)), np.array(
-            single_im_size)], dtype=np.int).transpose()[:3]
+            single_im_size)], dtype=np.int32).transpose()[:3]
     if len(crop_limits) != 2 and len(crop_limits) != 3:
         raise ValueError(
             f"crop_limits should be 2d or 3d, but {len(crop_limits)} is given!")
@@ -1607,7 +1607,8 @@ def correct_single_image(filename, channel, crop_limits=None,
                          seg_label=None, extend_dim=20,
                          single_im_size=_image_size, all_channels=_allowed_colors, 
                          num_buffer_frames=10, num_empty_frames=1, 
-                         drift=np.array([0, 0, 0]), correction_folder=_correction_folder, normalization=False,
+                         drift=np.array([0, 0, 0]), correction_folder=_correction_folder, num_skipped_channels=0,
+                         normalization=False,
                          z_shift_corr=True, hot_pixel_remove=True, illumination_corr=True, chromatic_corr=True,
                          return_limits=False, verbose=False):
     """wrapper for all correction steps to one image, used for multi-processing
@@ -1623,6 +1624,8 @@ def correct_single_image(filename, channel, crop_limits=None,
         num_buffer_frames: number of buffer frame in front and back of image, int (default:10)
         drift: 3d drift vector for this image, 1d-array
         correction_folder: path to find correction files
+        num_skipped_channels: if channel id is larger than number of identified colors,
+                              instead use channel indexing that skips num_skipped_channels, int (default: 0)
         z_shift_corr: whether do z-shift correction, bool (default: True)
         hot_pixel_remove: whether remove hot-pixels, bool (default: True)
         illumination_corr: whether do illumination correction, bool (default: True)
@@ -1650,7 +1653,7 @@ def correct_single_image(filename, channel, crop_limits=None,
         raise IOError("Input filename should be .dax format!")
     # decide crop_limits
     if crop_limits is not None:
-        _limits = np.array(crop_limits, dtype=np.int)
+        _limits = np.array(crop_limits, dtype=np.int32)
     elif seg_label is not None:
         _limits = visual_tools.Extract_crop_from_segmentation(seg_label, extend_dim=extend_dim,
                                                               single_im_size=single_im_size)
@@ -1674,6 +1677,7 @@ def correct_single_image(filename, channel, crop_limits=None,
                                                           drift=drift, single_im_size=single_im_size,
                                                           num_buffer_frames=num_buffer_frames,
                                                           num_empty_frames=num_empty_frames,
+                                                          num_skipped_channels=num_skipped_channels,
                                                           return_limits=True, verbose=verbose)
     ## corrections
     _corr_im = _cropped_im.copy()
@@ -1759,7 +1763,7 @@ def correct_one_dax(filename, sel_channels=None, crop_limits=None, seg_label=Non
         correction_channels = sel_channels
     # decide crop_limits
     if crop_limits is not None:
-        _limits = np.array(crop_limits, dtype=np.int)
+        _limits = np.array(crop_limits, dtype=np.int32)
     elif seg_label is not None:  # if segmentation_label is provided, then use this info
         _limits = visual_tools.Extract_crop_from_segmentation(seg_label, extend_dim=extend_dim,
                                                               single_im_size=single_im_size)
@@ -1861,7 +1865,7 @@ def multi_correct_one_dax(filename, sel_channels=None, crop_limit_list=None,
     # sel_channels:
     if sel_channels is None:
         sel_channels = all_channels[:3]
-    elif isinstance(sel_channels, str) or isinstance(sel_channels, int) or isinstance(sel_channels, np.int):
+    elif isinstance(sel_channels, str) or isinstance(sel_channels, int) or isinstance(sel_channels, np.int32):
         sel_channels = [str(sel_channels)]
     elif isinstance(sel_channels, list):
         sel_channels = [str(_ch) for _ch in sel_channels]
@@ -1891,7 +1895,7 @@ def multi_correct_one_dax(filename, sel_channels=None, crop_limit_list=None,
                                                                     single_im_size=single_im_size)
                 _limit_list.append(_limits)
     else:  # no crop-limit specified, crop the whole image
-        _limit_list = [np.stack([np.zeros(len(single_im_size)), single_im_size]).T.astype(np.int)]
+        _limit_list = [np.stack([np.zeros(len(single_im_size)), single_im_size]).T.astype(np.int32)]
     # check drift
     if len(drift) != 3:
         raise ValueError(f"Wrong input drift:{drift}, should be an array of 3")

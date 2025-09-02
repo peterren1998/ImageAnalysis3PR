@@ -446,6 +446,7 @@ class Cell_List():
             min_shape_ratio=_min_shape_ratio, signal_cap_ratio=_signal_cap_ratio,
             denoise_window=_denoise_window, shrink_percent=_shrink_percent,
             max_conv_th=_max_conv_th, min_boundary_th=_min_boundary_th,
+            num_skipped_channels=self.shared_parameters['num_skipped_channels'],
             make_plot=False, return_images=True, 
             save=_save, save_npy=_save_npy, save_folder=self.segmentation_folder, 
             save_postfix=_save_postfix, force=_overwrite, verbose=_verbose)

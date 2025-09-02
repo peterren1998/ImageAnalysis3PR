@@ -51,6 +51,7 @@ def get_regid_from_filename(fname):
     m = pattern.match(fname)
     return int(m.group(1))
 
+# NOTE: regname refers to the record.id field. region refers to the region name (i.e. chr21:28Mb-29.2Mb). At some point, will update nomenclature.
 def get_regid_from_regname(regname):
     regex_str = '[\dXY]+\:\d+-\d+_strand_[\+,-]_gene_(\d+)$'
     pattern = re.compile(regex_str)
@@ -68,6 +69,22 @@ def get_pbid_in_region(probe_record):
 
 def get_pbid_from_regname(regname):
     return int(regname.split('pb_')[1].split('_')[0])
+
+def get_region_from_regname(regname):
+    return regname.split('_gene')[0].lstrip('loc_')
+
+def get_chr_start_end_from_region(region):
+    chr, start_end = region.split(':')
+    start, end = start_end.split('-')
+    return chr, int(start), int(end)
+
+def get_midpoint_from_start_end(start, end):
+    return (start + end) // 2
+
+def get_chr_start_end_mid_from_region(region):
+    chr, start, end = get_chr_start_end_from_region(region)
+    mid = get_midpoint_from_start_end(start, end)
+    return chr, start, end, mid
 
 def release_shared_memory(name):
     """Release shared memory block with the given name."""

@@ -92,11 +92,11 @@ def add_source(im_,pos=[0,0,0],h=200,sig=[2,2,2],size_fold=10):
     xyz_disp = -pos_int+pos
     im_ker = gauss_ker(sig, int(max(sig)*size_fold), xyz_disp)
     im_ker_sz = np.array(im_ker.shape,dtype=int)
-    pos_min = np.array(pos_int-im_ker_sz/2, dtype=np.int)
-    pos_max = np.array(pos_min+im_ker_sz, dtype=np.int)
+    pos_min = np.array(pos_int-im_ker_sz/2, dtype=np.int32)
+    pos_max = np.array(pos_min+im_ker_sz, dtype=np.int32)
     im_shape = np.array(im.shape)
     def in_im(pos__):
-        pos_=np.array(pos__,dtype=np.int)
+        pos_=np.array(pos__,dtype=np.int32)
         pos_[pos_>=im_shape]=im_shape[pos_>=im_shape]-1
         pos_[pos_<0]=0
         return pos_
@@ -119,7 +119,7 @@ def sphere(center,radius,imshape=None):
     """Returns an int array (size: n x len(center)) with the xyz... coords of a sphere(elipsoid) of radius in imshape"""
     radius_=np.array(radius,dtype=float)
     if len(radius_.shape)==0:
-        radius_ = np.array([radius]*len(center),dtype=np.int)
+        radius_ = np.array([radius]*len(center),dtype=np.int32)
     xyz = np.array(np.indices(2*radius_+1),dtype=float)
     radius__=np.array(radius_,dtype=float)
     for i in range(len(xyz.shape)-1):
@@ -484,7 +484,7 @@ def beads_alignment_fast(beads, ref_beads, unique_cutoff=2., check_outlier=True,
             for _simplex in _tri.simplices.copy():
                 if _i in _simplex:
                     _neighbor_ids.append(_simplex)
-            _neighbor_ids = np.array(np.unique(_neighbor_ids).astype(np.int))
+            _neighbor_ids = np.array(np.unique(_neighbor_ids).astype(np.int32))
             _neighbor_ids = _neighbor_ids[_neighbor_ids != _i] # remove itself
             _neighbor_ids = _neighbor_ids[_neighbor_ids != -1] # remove error
             # calculate alternative shift
@@ -1174,7 +1174,7 @@ def DAPI_segmentation(ims, names,
             _stack_lims = [0, merge_layer_num]
         else:
             _stack_lims = [_layer-np.ceil((merge_layer_num-1)/2), _layer+np.floor((merge_layer_num-1)/2)]
-        _stack_lims = np.array(_stack_lims, dtype=np.int)
+        _stack_lims = np.array(_stack_lims, dtype=np.int32)
         # extract image
         _stack_im = np.zeros([np.max(_stack_lims)-np.min(_stack_lims), np.shape(_im)[1], np.shape(_im)[2]])
         # denoise and merge
@@ -1229,7 +1229,7 @@ def DAPI_segmentation(ims, names,
             print ("- screen labels in field of view:", names[_i])
         _failed_labels = []
         for _l in range(np.max(_seg_label)):
-            _contour = measure.find_contours(np.array(_seg_label==_l+1, dtype=np.int), 0)[0]
+            _contour = measure.find_contours(np.array(_seg_label==_l+1, dtype=np.int32), 0)[0]
             _length = np.sum(np.sqrt(np.sum((_contour[1:] - _contour[:-1])**2, axis=1)))
             _size = np.sum(_seg_label==_l+1)
             _center = np.round(ndimage.measurements.center_of_mass(_seg_label==_l+1))
@@ -1285,6 +1285,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         max_cell_size=40000, min_cell_size=5000, min_shape_ratio=0.035,
         max_iter=4, shrink_percent=15,
         dialation_dim=4, random_walker_beta=0.1, remove_fov_boundary=50,
+        num_skipped_channels=0,
         save=True, save_folder=None, force=False, 
         save_npy=True, save_postfix="_segmentation",
         make_plot=False, return_images=False, verbose=True):
@@ -1314,6 +1315,8 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         dialation_dim: dimension for dialation after splitting objects, int (default:4)
         random_walker_beta: beta used for random walker segementation algorithm, float (default: 0.1)
         remove_fov_boundary: if certain label is too close to fov boundary within this number of pixels, remove, int (default: 50)
+        num_skipped_channels: if channel id is larger than number of identified colors,
+                              instead use channel indexing that skips num_skipped_channels, int (default: 0)
         make_plot: whether making plots for checking purpose, bool
         verbose: whether say something during the process, bool
     Output:
@@ -1351,7 +1354,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
             _load_args = [(_fl, correction_channel, None, None, 20,
                            single_im_size, all_channels, 
                            num_buffer_frames,num_empty_frames,
-                           np.zeros(3), correction_folder) for _fl in filenames]
+                           np.zeros(3), correction_folder, num_skipped_channels) for _fl in filenames]
             _load_pool = mp.Pool(num_threads)
             _ims = _load_pool.starmap(corrections.correct_single_image, _load_args, chunksize=1)
             _load_pool.close()
@@ -1366,7 +1369,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         _load_args = [(_fl, correction_channel, None, None, 20,
                        single_im_size, all_channels, 
                        num_buffer_frames,num_empty_frames,
-                       np.zeros(3), correction_folder) for _fl in filenames]        
+                       np.zeros(3), correction_folder, num_skipped_channels) for _fl in filenames]        
         _load_pool = mp.Pool(num_threads)
         _ims = _load_pool.starmap(corrections.correct_single_image, _load_args, chunksize=1)
         _load_pool.close()
@@ -1393,7 +1396,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
             _stack_lims = [0, merge_layer_num]
         else:
             _stack_lims = [_layer-np.ceil((merge_layer_num-1)/2), _layer+np.floor((merge_layer_num-1)/2)]
-        _stack_lims = np.array(_stack_lims, dtype=np.int)
+        _stack_lims = np.array(_stack_lims, dtype=np.int32)
         # extract image
         _stack_im = np.zeros([np.max(_stack_lims)-np.min(_stack_lims), np.shape(_im)[1], np.shape(_im)[2]])
         # denoise and merge
@@ -1429,13 +1432,13 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
     _close_objects = [morphology.closing(_open, morphology.disk(3)) for _open in _open_objects]
     _close_objects = [morphology.remove_small_objects(_close, min_cell_size) for _close in _close_objects]
     # labeling
-    _labels = [ np.array(ndimage.label(_close)[0], dtype=np.int) for _close in _close_objects]
+    _labels = [ np.array(ndimage.label(_close)[0], dtype=np.int32) for _close in _close_objects]
     
     ## Tuning labels
     def _label_binary_im(_im, obj_size=3):
         '''Given an binary image, find labels for all isolated objects with given size'''
         # make sure image is binary
-        _bim = np.array(_im > 0, dtype=np.int)
+        _bim = np.array(_im > 0, dtype=np.int32)
         # find objects
         _open = morphology.opening(_bim, morphology.disk(obj_size))
         _close = morphology.closing(_open, morphology.disk(obj_size))
@@ -1461,7 +1464,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
     def _get_label_features(_label, _id):
         """Given a label and corresponding label id, return four features of this label"""
         # get features
-        _contours = measure.find_contours(np.array(_label==_id, dtype=np.int), 0)
+        _contours = measure.find_contours(np.array(_label==_id, dtype=np.int32), 0)
         if len(_contours) > 0:
             _length = np.sum(np.sqrt(np.sum((np.roll(_contours[0],1,axis=0) - _contours[0])**2, axis=1)))
         else:
@@ -1481,14 +1484,14 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         _length,_size,_center,_ratio = _get_label_features(_label, _id)
         if _size < 2*min_size: # adjust shrink percentage if shape is small
             shrink_percent = shrink_percent * 0.8
-        _mask = np.array(_label == _id, dtype=np.int)
+        _mask = np.array(_label == _id, dtype=np.int32)
         _mask *= np.array(_stack_im > stats.scoreatpercentile(_stack_im[_label==_id], shrink_percent), dtype=int)
         #_mask *= np.array(_conv_im < stats.scoreatpercentile(_conv_im[_label==_id], 100-2*shrink_percent), dtype=int)
         _mask = ndimage.binary_erosion(_mask, structure=morphology.disk(erosion_dim))
         _mask = morphology.remove_small_objects(_mask.astype(bool), min_size)
         _new_label, _num = _label_binary_im(_mask, 3)
         for _l in range(_num):
-            _single_label = np.array(_new_label==_l+1, dtype=np.int)
+            _single_label = np.array(_new_label==_l+1, dtype=np.int32)
             _single_label = ndimage.binary_dilation(_single_label, structure=morphology.disk(int(dialation_dim/2)))
             _new_label[_single_label>0] = _l+1
         return _new_label, _num
@@ -1499,9 +1502,9 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
                                 erosion_dim=2, dialation_dim=10,
                                 verbose=False):
         """Function to iteratively split labels within one fov"""
-        _single_labels = [np.array(_label==_i+1,dtype=np.int) for _i in range(int(np.max(_label))) if np.sum(np.array(_label==_i+1,dtype=np.int))>0]
+        _single_labels = [np.array(_label==_i+1,dtype=np.int32) for _i in range(int(np.max(_label))) if np.sum(np.array(_label==_i+1,dtype=np.int32))>0]
         _iter_counts = [0 for _i in range(len(_single_labels))]
-        _final_label = np.zeros(np.shape(_label), dtype=np.int)
+        _final_label = np.zeros(np.shape(_label), dtype=np.int32)
         # start selecting labels
         while(len(_single_labels)) > 0:
             _sg_label = _single_labels.pop(0)
@@ -1527,7 +1530,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
                                                        shrink_percent=shrink_percent,
                                                        erosion_dim=erosion_dim, dialation_dim=dialation_dim)
                 for _i in range(_num):
-                    _cand_label = np.array(_new_label==_i+1, dtype=np.int)
+                    _cand_label = np.array(_new_label==_i+1, dtype=np.int32)
                     if _check_label(_cand_label, 1, min_shape_ratio*0.9**_iter_ct, max_size, verbose=verbose):
                         if verbose:
                             print(f"-- saving label: {np.max(_final_label)+1}")
@@ -1565,13 +1568,13 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
                 _updated_label[_updated_label==_l+1] = 0
         # relabel
         _relabel_id = 1
-        _seg_label = np.zeros(np.shape(_updated_label), dtype=np.int)
+        _seg_label = np.zeros(np.shape(_updated_label), dtype=np.int32)
         for _l in range(int(np.max(_updated_label))):
-            if np.sum(np.array(_updated_label == _l+1,dtype=np.int)) > 0:
+            if np.sum(np.array(_updated_label == _l+1,dtype=np.int32)) > 0:
                 _seg_label[_updated_label==_l+1] = _relabel_id
                 _relabel_id += 1
         # label background
-        _dialated_mask = ndimage.binary_dilation(np.array(_seg_label>0, dtype=np.int), structure=morphology.disk(int(dialation_dim/2)))
+        _dialated_mask = ndimage.binary_dilation(np.array(_seg_label>0, dtype=np.int32), structure=morphology.disk(int(dialation_dim/2)))
         _seg_label[(_seg_label==0)*(_dialated_mask==0)] = -1
         # save
         _seg_labels.append(_seg_label)
@@ -1729,14 +1732,14 @@ def crop_cell(im, segmentation_label, drift=None, extend_dim=20, overlap_thresho
                 for _m in range(len(_label_dim)):
                     if _limit_diffs[_m,1] == 0:
                         _limit_diffs[_m,1] = _limits[_m,1] - _limits[_m,0]
-                _limit_diffs = _limit_diffs.astype(np.int)
+                _limit_diffs = _limit_diffs.astype(np.int32)
                 #print _limit_diffs
                 _crop_ims.append(_post_im[_limit_diffs[0,0]:_limit_diffs[0,0]+_limits[0,1]-_limits[0,0],\
                                           _limit_diffs[2,0]:_limit_diffs[2,0]+_limits[2,1]-_limits[2,0],\
                                           _limit_diffs[1,0]:_limit_diffs[1,0]+_limits[1,1]-_limits[1,0]])
 
         else: # 2D
-            _limits = np.zeros([len(_label_dim),2], dtype=np.int) # initialize matrix to save cropping limit
+            _limits = np.zeros([len(_label_dim),2], dtype=np.int32) # initialize matrix to save cropping limit
             _binary_label = segmentation_label == _l+1 # extract binary image
             for _m in range(len(_label_dim)):
                 _1d_label = _binary_label.sum(_m) > 0
@@ -1756,7 +1759,7 @@ def crop_cell(im, segmentation_label, drift=None, extend_dim=20, overlap_thresho
                 _crop_ims.append(im[:,_limits[1,0]:_limits[1,1],_limits[0,0]:_limits[0,1]])
             else: # do drift correction first and crop
                 # define a new drift limits to do cropping
-                _drift_limits = np.zeros(_limits.shape, dtype=np.int)
+                _drift_limits = np.zeros(_limits.shape, dtype=np.int32)
                 for _m, _dim in zip(list(range(len(_label_dim))), _im_dim[-len(_label_dim):]):
                     _drift_limits[_m, 0] = max(_limits[_m, 0]-np.ceil(np.abs(drift[2-_m])), 0)
                     _drift_limits[_m, 1] = min(_limits[_m, 1]+np.ceil(np.abs(drift[2-_m])), _dim)
@@ -1766,7 +1769,7 @@ def crop_cell(im, segmentation_label, drift=None, extend_dim=20, overlap_thresho
                 # drift correction
                 _post_im = shift(_pre_im, -drift)
                 # re-crop
-                _limit_diffs = (_limits - _drift_limits).astype(np.int)
+                _limit_diffs = (_limits - _drift_limits).astype(np.int32)
                 #print _limit_diffs
                 _crop_ims.append(_post_im[:,_limit_diffs[1,0]:_limit_diffs[1,0]+_limits[1,1]-_limits[1,0],_limit_diffs[0,0]:_limit_diffs[0,0]+_limits[0,1]-_limits[0,0]])
     return _crop_ims
@@ -1816,15 +1819,15 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
     # start seeding 
     if center is not None:
         _center = np.array(center, dtype=np.float32)
-        _limits = np.zeros([2, 3], dtype=np.int)
+        _limits = np.zeros([2, 3], dtype=np.int32)
         _limits[0, 1:] = np.array([np.max([x, y]) for x, y in zip(
-            np.zeros(2), _center[1:]-seed_radius)], dtype=np.int)
+            np.zeros(2), _center[1:]-seed_radius)], dtype=np.int32)
         _limits[0, 0] = np.array(
-            np.max([0, _center[0]-seed_radius/2]), dtype=np.int)
+            np.max([0, _center[0]-seed_radius/2]), dtype=np.int32)
         _limits[1, 1:] = np.array([np.min([x, y]) for x, y in zip(
-            _dim[1:], _center[1:]+seed_radius)], dtype=np.int)
+            _dim[1:], _center[1:]+seed_radius)], dtype=np.int32)
         _limits[1, 0] = np.array(
-            np.min([_dim[0], _center[0]+seed_radius/2]), dtype=np.int)
+            np.min([_dim[0], _center[0]+seed_radius/2]), dtype=np.int32)
         _local_center = _center - _limits[0]
         # crop im
         _cim = _im[_limits[0, 0]:_limits[1, 0], _limits[0, 1]:_limits[1, 1], _limits[0, 2]:_limits[1, 2]]
@@ -2108,11 +2111,11 @@ def slice_image(fl, sizes, zlims, xlims, ylims, zstep=1, zstart=0, empty_frame=1
         raise ValueError(
             f"Wrong z-step input:{zstep}, should be positive integer.")
     # image dimension
-    sz, sx, sy = np.array(sizes, dtype=np.int)[:3]
+    sz, sx, sy = np.array(sizes, dtype=np.int32)[:3]
     # acquire min-max indices
-    minz, maxz = np.sort(np.array(zlims, dtype=np.int))[:2]
-    minx, maxx = np.sort(np.array(xlims, dtype=np.int))[:2]
-    miny, maxy = np.sort(np.array(ylims, dtype=np.int))[:2]
+    minz, maxz = np.sort(np.array(zlims, dtype=np.int32))[:2]
+    minx, maxx = np.sort(np.array(xlims, dtype=np.int32))[:2]
+    miny, maxy = np.sort(np.array(ylims, dtype=np.int32))[:2]
     # acquire dimension
     dz = int((maxz-minz)/zstep)
     dx = int(maxx-minx)
@@ -2340,7 +2343,7 @@ def slice_2d_image(fl, im_shape, xlims, ylims, npy_start=128, image_dtype=np.uin
 def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
                       all_channels=_allowed_colors, single_im_size=_image_size,
                       drift=np.array([0, 0, 0]), num_empty_frames=1,
-                      return_limits=False, verbose=False):
+                      num_skipped_channels=0, return_limits=False, verbose=False):
     """Function to crop one image given filename, color_channel and crop_limits
     Inputs:
         filename: .dax filename for given image, string of filename
@@ -2350,6 +2353,8 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
         num_buffer_frame: number of frames before z-scan starts, int (default:10)
         all_channels: all allowed colors in given data, list (default: _allowed_colors)
         single_im_size: image size for single color full image, list/array of 3 (default:[30,2048,2048])
+        num_skipped_channels: if channel id is larger than number of identified colors,
+                              instead use channel indexing that skips num_skipped_channels
         drift: drift to ref-frame of this image, np.array of 3 (default:[0,0,0])
         verbose: say something!, bool (default:False)
     Output:
@@ -2371,12 +2376,12 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
         raise ValueError("dimension of drift should be 3!")
     # crop_limits
     if crop_limits is None:
-        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int)
+        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int32)
     elif len(crop_limits) == 2:
         crop_limits = np.array(
-            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int)
+            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int32)
     elif len(crop_limits) == 3:
-        crop_limits = np.array(crop_limits, dtype=np.int)
+        crop_limits = np.array(crop_limits, dtype=np.int32)
     else:
         raise IndexError(
             f"Wrong shape for crop_limits:{np.shape(crop_limits)}")
@@ -2385,7 +2390,7 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
         if _lims[1] < 0:
             _lims[1] += _s
     # convert crop_limits into drift_limits
-    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int)
+    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int32)
     for _i, (_d, _lims) in enumerate(zip(drift, crop_limits)):
         # expand drift_limits a bit for shifting
         _drift_limits[_i, 0] = max(_lims[0]-np.ceil(np.abs(_d)), 0)
@@ -2400,6 +2405,8 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
     _zlims = [num_buffer_frames+_drift_limits[0, 0]*_num_color,
               num_buffer_frames+_drift_limits[0, 1]*_num_color]
     # slice image
+    if _num_color <= _channel_id:
+        _channel_id -= num_skipped_channels
     _crp_im = slice_image(filename, _full_im_shape, _zlims, _drift_limits[1],
                           _drift_limits[2], zstep=_num_color, zstart=_channel_id,
                           empty_frame=num_empty_frames)
@@ -2409,7 +2416,7 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
 
     ## 2. second crop to adjust drift
     # get differences between two limits
-    _limit_diffs = (crop_limits - _drift_limits).astype(np.int)
+    _limit_diffs = (crop_limits - _drift_limits).astype(np.int32)
 
     # do second crop
     _crp_im = _crp_im[_limit_diffs[0, 0]: _limit_diffs[0, 0]+crop_limits[0, 1]-crop_limits[0, 0],
@@ -2460,12 +2467,12 @@ def crop_multi_channel_image(filename, channels, crop_limits=None,
         raise ValueError("dimension of drift should be 3!")
     # crop_limits
     if crop_limits is None:
-        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int)
+        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int32)
     elif len(crop_limits) == 2:
         crop_limits = np.array(
-            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int)
+            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int32)
     elif len(crop_limits) == 3:
-        crop_limits = np.array(crop_limits, dtype=np.int)
+        crop_limits = np.array(crop_limits, dtype=np.int32)
     else:
         raise IndexError(
             f"Wrong shape for crop_limits:{np.shape(crop_limits)}")
@@ -2474,7 +2481,7 @@ def crop_multi_channel_image(filename, channels, crop_limits=None,
         if _lims[1] < 0:
             _lims[1] += _s
     # convert crop_limits into drift_limits
-    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int)
+    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int32)
     for _i, (_d, _lims) in enumerate(zip(drift, crop_limits)):
         # expand drift_limits a bit for shifting
         _drift_limits[_i, 0] = max(_lims[0]-np.ceil(np.abs(_d)), 0)
@@ -2497,7 +2504,7 @@ def crop_multi_channel_image(filename, channels, crop_limits=None,
 
     ## 2. second crop to adjust drift
     # get differences between two limits
-    _limit_diffs = (crop_limits - _drift_limits).astype(np.int)
+    _limit_diffs = (crop_limits - _drift_limits).astype(np.int32)
 
     # do second crop
     _crp_ims = [_im[_limit_diffs[0, 0]: _limit_diffs[0, 0]+crop_limits[0, 1]-crop_limits[0, 0],
@@ -2548,12 +2555,12 @@ def crop_multi_channel_image_v2(filename, channels, crop_limits=None,
         raise ValueError("dimension of drift should be 3!")
     # crop_limits
     if crop_limits is None:
-        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int)
+        crop_limits = np.stack([np.zeros(3), single_im_size]).T.astype(np.int32)
     elif len(crop_limits) == 2:
         crop_limits = np.array(
-            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int)
+            [np.array([0, single_im_size[0]])]+list(crop_limits), dtype=np.int32)
     elif len(crop_limits) == 3:
-        crop_limits = np.array(crop_limits, dtype=np.int)
+        crop_limits = np.array(crop_limits, dtype=np.int32)
     else:
         raise IndexError(
             f"Wrong shape for crop_limits:{np.shape(crop_limits)}")
@@ -2562,7 +2569,7 @@ def crop_multi_channel_image_v2(filename, channels, crop_limits=None,
         if _lims[1] < 0:
             _lims[1] += _s
     # convert crop_limits into drift_limits
-    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int)
+    _drift_limits = np.zeros(crop_limits.shape, dtype=np.int32)
     for _i, (_d, _lims) in enumerate(zip(drift, crop_limits)):
         # expand drift_limits a bit for shifting
         _drift_limits[_i, 0] = max(_lims[0]-np.ceil(np.abs(_d)), 0)
@@ -2581,7 +2588,7 @@ def crop_multi_channel_image_v2(filename, channels, crop_limits=None,
                            empty_frame=num_empty_frames)
     ## 2. do shift if drift exists
     # get differences between two limits
-    _limit_diffs = (crop_limits - _drift_limits).astype(np.int)
+    _limit_diffs = (crop_limits - _drift_limits).astype(np.int32)
     if drift.any():    
         # 2.1 get coordiates to be mapped
         _coords = np.meshgrid( np.arange(crop_limits[0][1]-crop_limits[0][0]), 
@@ -2630,13 +2637,13 @@ def visualize_fitted_spot_crops(im, centers, center_inds, radius=10):
             if len(ct) != 3:
                 raise ValueError(
                     f"Wrong input dimension of centers, only expect [z,x,y] coordinates in center:{ct}")
-            crop_l = np.array([np.zeros(3), np.round(ct-radius)], dtype=np.int).max(0)
+            crop_l = np.array([np.zeros(3), np.round(ct-radius)], dtype=np.int32).max(0)
             crop_r = np.array([np.array(np.shape(im)), 
-                            np.round(ct+radius+1)], dtype=np.int).min(0)
+                            np.round(ct+radius+1)], dtype=np.int32).min(0)
             _cim = im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]]
             _nim = np.ones([radius*2+1]*3) * np.median(_cim)
-            _im_l = np.round(ct - crop_l + radius).astype(np.int)
-            _im_r = np.round(crop_r - ct + radius).astype(np.int)
+            _im_l = np.round(ct - crop_l + radius).astype(np.int32)
+            _im_r = np.round(crop_r - ct + radius).astype(np.int32)
             _nim[_im_l[0],_im_r[0],
                  _im_l[1],_im_r[1],
                  _im_l[2],_im_r[2]] = _cim
@@ -2651,12 +2658,12 @@ def visualize_fitted_spot_crops(im, centers, center_inds, radius=10):
             for ct in _list:
                 if len(ct) != 3:
                     raise ValueError(f"Wrong input dimension of centers, only expect [z,x,y] coordinates in center:{ct}")
-                crop_l = np.array([np.zeros(3), np.round(ct-radius)], dtype=np.int).max(0)
-                crop_r = np.array([np.array(np.shape(_im)), np.round(ct+radius+1)], dtype=np.int).min(0)
+                crop_l = np.array([np.zeros(3), np.round(ct-radius)], dtype=np.int32).max(0)
+                crop_r = np.array([np.array(np.shape(_im)), np.round(ct+radius+1)], dtype=np.int32).min(0)
                 _cim = _im[crop_l[0]:crop_r[0], crop_l[1]:crop_r[1], crop_l[2]:crop_r[2]]
                 _nim = np.ones([radius*2+1]*3) * np.median(_cim)
-                _im_l = np.round(crop_l - ct + radius).astype(np.int)
-                _im_r = np.round(crop_r - ct + radius).astype(np.int)
+                _im_l = np.round(crop_l - ct + radius).astype(np.int32)
+                _im_r = np.round(crop_r - ct + radius).astype(np.int32)
                 _nim[_im_l[0]:_im_r[0],
                      _im_l[1]:_im_r[1],
                      _im_l[2]:_im_r[2]] = _cim
@@ -2720,13 +2727,13 @@ def Extract_crop_from_segmentation(segmentation_label, extend_dim=20, single_im_
         _limits: 3-by-2 matrix for segmentation crop limits
         """
     # convert to local vars
-    _seg_label = np.array(segmentation_label > 0, dtype=np.int)
-    _limits = np.zeros([3, 2], dtype=np.int)
+    _seg_label = np.array(segmentation_label > 0, dtype=np.int32)
+    _limits = np.zeros([3, 2], dtype=np.int32)
     _limits[0, 1] = single_im_size[0]
     # calculate _limits
     for _dim in range(len(_seg_label.shape)):
         _1d_label = np.array(np.sum(_seg_label, axis=tuple(i for i in range(len(_seg_label.shape)) if i != _dim)) > 0,
-                             dtype=np.int)
+                             dtype=np.int32)
         _1d_indices = np.where(_1d_label)[0]
         # update limits
         _limits[_dim+1, 0] = max(_1d_indices[0]-extend_dim, 0)
@@ -2834,7 +2841,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
                                              _rot_old_M, old_segmentation.shape, 
                                              flags=cv2.INTER_NEAREST,
-                                             borderMode=cv2.BORDER_CONSTANT), dtype=np.int)
+                                             borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
     
     ## 3. generate cleaned_segmentation_label
     _cleaned_rot_seg_label = -1 * np.ones(np.shape(_rot_seg_label))
@@ -3274,8 +3281,8 @@ def max_project_AB_compartment(spots, comp_dict, pca_other_2d=True):
         raise TypeError(f"Wrong input type of comp_dict, should be dict but {type(comp_dict)} is given")
     
     # extract indices for first two keys in comp_dict
-    _ind1 = np.array(list(comp_dict.values())[0], dtype=np.int)
-    _ind2 = np.array(list(comp_dict.values())[1], dtype=np.int)
+    _ind1 = np.array(list(comp_dict.values())[0], dtype=np.int32)
+    _ind2 = np.array(list(comp_dict.values())[1], dtype=np.int32)
     # get original coordinates
     _coords = _spots[:,1:4]
     # get first axis
@@ -3300,7 +3307,7 @@ def max_project_AB_compartment(spots, comp_dict, pca_other_2d=True):
     _trans_coords = _coords @ _r
     # if PCA the other two axis, do the following:
     if pca_other_2d:
-        _clean_inds = np.array([_i for _i,_c in enumerate(_trans_coords) if not np.isnan(_c).any()],dtype=np.int)
+        _clean_inds = np.array([_i for _i,_c in enumerate(_trans_coords) if not np.isnan(_c).any()],dtype=np.int32)
         _clean_2d_coords = _trans_coords[_clean_inds][:,1:3]
         if 'PCA' not in locals():
             from sklearn.decomposition import PCA
