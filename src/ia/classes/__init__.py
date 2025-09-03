@@ -2,6 +2,7 @@ import sys,glob,os,time,copy
 import numpy as np
 import pickle as pickle
 import multiprocessing as mp
+import re
 
 from .. import get_img_info, corrections, visual_tools
 #from ..domain_tools.calling import iterative_domain_calling, basic_domain_calling, local_domain_calling
@@ -44,6 +45,16 @@ from . import preprocess
 
 # initialize pool
 init_dic = {}
+
+def update_fovid_in_filename(filename, fovid_mapping_dict, prefix, postfix):
+    return re.sub(f'{prefix}(\d+){postfix}', lambda m: f'{prefix}{str(fovid_mapping_dict[int(m.group(1))]).zfill(3)}{postfix}', filename)
+
+def get_fovid_from_filename(filename, prefix, postfix):
+    match = re.search(f'{prefix}(\d+){postfix}', filename)
+    if match:
+        return int(match.group(1))
+    else:
+        return None
 
 def _init_unique_pool(_ic_profile_dic, _cac_profile_dic, _ic_shape, _cac_shape):
     """initialize pool, function used to put data into shared memory"""
@@ -664,11 +675,15 @@ class Cell_List():
     def _translate_old_segmentations(self, old_segmentation_folder, old_dapi_folder, rotation_mat,
                                     _old_correction_folder=_correction_folder,
                                     _new_correction_folder=_correction_folder,
+                                    fovid_mapping_dict=None,
                                     _num_threads=12, _fft_gb=0, _fft_max_disp=200,
                                     _save=True, _save_postfix='_segmentation',
+                                    replace_save_prefix_str=None, rna_channels=None,
                                     _save_npy=True, _return_all=False, _force=False, _verbose=True):
         """Function to translate segmenation from a previous experiment 
-        given old_segmentation_folder and rotation matrix"""
+        given old_segmentation_folder and rotation matrix
+        replace_save_prefix_str (str): if not None, look for associated dapi dax file by replacing the provided prefix string with "Conv_zscan_" 
+        """
         # number of threads
         if hasattr(self, 'num_threads'):
             _num_threads = max(_num_threads, self.num_threads)
@@ -706,24 +721,49 @@ class Cell_List():
                     _select_dapi = True  # successfully selected dapi
         if not _select_dapi:
             raise ValueError("No DAPI folder detected in annotated_folders, stop!")
+        if fovid_mapping_dict is not None and replace_save_prefix_str is None:
+            raise ValueError('fovid_mapping_dict can only be used when replace_save_prefix_str is given! This is due to how the filenames are interpreted.')
 
         # translate segmentation file
         _seg_args, _seg_fls = [], [] # list for multi-processing
         _new_filenames, _new_labels, _dapi_ims = [], [], [] # list for final results
         for _old_fl in old_seg_filenames:
+            if fovid_mapping_dict is not None:
+                if get_fovid_from_filename(_old_fl, replace_save_prefix_str, _file_postfix) not in fovid_mapping_dict:
+                    if _verbose:
+                        print(f'-- skip {_old_fl} as its fovid is not in fovid_maping_dict (not used in DNA experiment)')
+                    continue
             _new_fl = os.path.join(self.segmentation_folder,
                                 os.path.basename(_old_fl))
-            _dapi_im_name = os.path.basename(_old_fl).replace(
-                _save_postfix+_file_postfix, '.dax')
+            if isinstance(replace_save_prefix_str, str):
+                _dapi_im_name = os.path.basename(_old_fl).replace(
+                    replace_save_prefix_str, 'Conv_zscan_'
+                )
+                _dapi_im_name = _dapi_im_name.replace(
+                    _file_postfix, '.dax'
+                )
+                _dapi_im_name = re.sub(r'Conv_zscan_(\d{1,3})\.dax', lambda m: f'Conv_zscan_{m.group(1).zfill(3)}.dax', _dapi_im_name)
+            else:
+                _dapi_im_name = os.path.basename(_old_fl).replace(
+                    _save_postfix+_file_postfix, '.dax')
+            if fovid_mapping_dict is not None:
+                _new_fl = update_fovid_in_filename(_new_fl, fovid_mapping_dict, replace_save_prefix_str, _file_postfix)
+                _dapi_im_name = update_fovid_in_filename(_dapi_im_name, fovid_mapping_dict, 'Conv_zscan_', '.dax')
+            if rna_channels is None:
+                rna_channels = self.channels
             # translate new segmentation if it doesn't exists or force to generate new ones
             if _force or not os.path.exists(_new_fl):
                 if _verbose:
                     print(f"++ prepare translating segmentation label:{_old_fl}")
                 # prepare args for multi-processing
                 _arg = (_old_fl, os.path.join(old_dapi_folder, _dapi_im_name), os.path.join(_dapi_fd, _dapi_im_name),
-                        rotation_mat, None, '405', self.channels, 
+                        rotation_mat, None, '405', rna_channels,
+                        self.channels,
                         self.shared_parameters['num_buffer_frames'], 
-                        self.shared_parameters['num_empty_frames'], 
+                        self.shared_parameters['num_empty_frames'],
+                        self.shared_parameters['num_skipped_channels'],
+                        self.shared_parameters['rna_single_im_size'],
+                        self.shared_parameters['single_im_size'],
                         _old_correction_folder, _new_correction_folder,
                         _fft_gb, _fft_max_disp, _return_all, _verbose)
                 _seg_args.append(_arg)

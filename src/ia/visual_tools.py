@@ -2322,7 +2322,7 @@ def slice_2d_image(fl, im_shape, xlims, ylims, npy_start=128, image_dtype=np.uin
     # open handle
     f = open(fl, 'rb')
     if _file_postfix == 'npy':
-        pt_pos = np.int(npy_start/element_size)
+        pt_pos = np.int32(npy_start/element_size)
     else:
         pt_pos = 0
     if verbose:
@@ -2744,8 +2744,12 @@ def Extract_crop_from_segmentation(segmentation_label, extend_dim=20, single_im_
 # translate segmentation from previous experiment
 def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im, 
                            rotation_mat=None, rotation_ref_file=None,
-                           dapi_channel='405', all_channels=_allowed_colors, 
+                           dapi_channel='405', rna_channels=_allowed_colors,
+                           dna_channels=_allowed_colors,
                            num_buffer_frames=10, num_empty_frames=1,
+                           num_skipped_channels=0,
+                           rna_single_im_size = _image_size,
+                           dna_single_im_size = _image_size,
                            old_correction_folder=_correction_folder, 
                            new_correction_folder=_correction_folder, 
                            fft_gb=0, fft_max_disp=200, 
@@ -2758,7 +2762,8 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         new_dapi_im: DAPI image from new experiment, 3d-array
         rotation_mat: rotation matrix, adopted from align_manual_points, 2x2 ndarray or None (default by loading from file)
         dapi_channel: channel used for dapi, int or str (default: '405')
-        all_channels: all allowed channels, list
+        rna_channels: rna allowed channels, list
+        dna_channels: dna allowed channels, list
         old_correction_folder: correction folder for old dapi
         new_correction_folder: correction folder for new dapi
         return_new_dapi: whether return new dapi image as well, bool
@@ -2781,8 +2786,11 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     elif isinstance(old_dapi_im, str):
         if verbose:
             print(f"-- loading old_dapi_im from file:{old_dapi_im}")
-        old_dapi_im = corrections.correct_single_image(old_dapi_im, dapi_channel, all_channels=all_channels,
-                                               correction_folder=old_correction_folder, 
+            print(f'rna_channels: {rna_channels}')
+        old_dapi_im = corrections.correct_single_image(old_dapi_im, dapi_channel, all_channels=rna_channels,
+                                               correction_folder=old_correction_folder,
+                                               num_skipped_channels=num_skipped_channels,
+                                               single_im_size=rna_single_im_size,
                                                num_buffer_frames=num_buffer_frames, 
                                                num_empty_frames=num_empty_frames,
                                                verbose=verbose) 
@@ -2793,8 +2801,10 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         if verbose:
             print(f"-- loading new_dapi_im from file:{new_dapi_im}")
         new_dapi_im = corrections.correct_single_image(new_dapi_im, dapi_channel,
-                                               all_channels=all_channels,
-                                               correction_folder=new_correction_folder, 
+                                               all_channels=dna_channels,
+                                               correction_folder=new_correction_folder,
+                                               num_skipped_channels=num_skipped_channels,
+                                               single_im_size=dna_single_im_size,
                                                num_buffer_frames=num_buffer_frames, 
                                                num_empty_frames=num_empty_frames,
                                                verbose=verbose) 
@@ -2813,8 +2823,8 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         else:
             raise IOError(f"File:{rotation_ref_file} for rotation reference doesnot exist, exit.")
     # dapi channel should be in all channels
-    if dapi_channel not in all_channels:
-        raise ValueError(f"dapi_channel:{dapi_channel} is not in all_channels:{all_channels}")
+    if dapi_channel not in rna_channels or dapi_channel not in dna_channels:
+        raise ValueError(f"dapi_channel:{dapi_channel} is not in rna_channels:{rna_channels} or dna_channels:{dna_channels}")
     
     ## 1. calculate translational drift
     if verbose:
@@ -2838,11 +2848,19 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     # rotate old image
     #_rot_old_im = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape, borderMode=cv2.BORDER_DEFAULT) for _lyr in old_dapi_im], dtype=np.uint16)
     # rotate segmentation
+
+    if verbose:
+        print('old_segmentation.shape: ', old_segmentation.shape)
+        print('_rot_old_M.shape: ', _rot_old_M.shape)
+
     _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
                                              _rot_old_M, old_segmentation.shape, 
                                              flags=cv2.INTER_NEAREST,
                                              borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
-    
+    if verbose:
+        print(f'Segmentation for {old_segmentation} successfully rotated and translated!')
+
+
     ## 3. generate cleaned_segmentation_label
     _cleaned_rot_seg_label = -1 * np.ones(np.shape(_rot_seg_label))
     for _i in range(np.max(_rot_seg_label)):
@@ -2854,6 +2872,9 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         # save to cleaned labels
         _cleaned_rot_seg_label[_cell_label] = _i+1
     
+    if verbose:
+        print(f'Segmentation for {old_segmentation} successfully cleaned!')
+
     if return_new_dapi:
         return _cleaned_rot_seg_label, new_dapi_im
     else:
