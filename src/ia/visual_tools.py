@@ -2757,9 +2757,9 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     """Function to translate segmentation to another given both dapi_images 
     (rotation_matrix may be provided as well)
     Inputs:
-        old_segmentation: reference segmentation to be translated, filename or 2d-np.array
-        old_dapi_im: DAPI image from original experiment, 3d-array
-        new_dapi_im: DAPI image from new experiment, 3d-array
+        old_segmentation: reference segmentation to be translated, filename or 3d-np.array NOTE: originally implemented for 2d-np.array, which is no longer supported
+        old_dapi_im: DAPI image from original experiment, 3d-array or str
+        new_dapi_im: DAPI image from new experiment, 3d-array or str
         rotation_mat: rotation matrix, adopted from align_manual_points, 2x2 ndarray or None (default by loading from file)
         dapi_channel: channel used for dapi, int or str (default: '405')
         rna_channels: rna allowed channels, list
@@ -2771,6 +2771,10 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     Outputs:
         _cleaned_rot_seg_label: new segmentation label after rotation/translation/cleanup
     """
+    # if verbose:
+    #     print('new_dapi_im.shape original: ', new_dapi_im.shape)
+    #     print('old_dapi_im.shape original: ', old_dapi_im.shape)
+
     from math import pi
     ## check inputs
     # old_segmentation
@@ -2807,7 +2811,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                                                single_im_size=dna_single_im_size,
                                                num_buffer_frames=num_buffer_frames, 
                                                num_empty_frames=num_empty_frames,
-                                               verbose=verbose) 
+                                               verbose=verbose)
     # check dimension of rotation_matrix
     if rotation_mat is not None:
         if len(rotation_mat.shape) != 2:
@@ -2841,7 +2845,8 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     if verbose:
         print(f"--- drift between DAPI images:{_drift}")
     ## 2. rotate segmentation
-    print(f"-- start generating translated segmentation labels")
+    if verbose:
+        print(f"-- start generating translated segmentation labels")
     # define mat to translate old mat into new ones
     _rot_old_M = cv2.getRotationMatrix2D((_dx/2, _dy/2), -_rotation_angle, 1)
     _rot_old_M[:,2] -= np.flipud(_drift[-2:])
@@ -2849,16 +2854,34 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     #_rot_old_im = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape, borderMode=cv2.BORDER_DEFAULT) for _lyr in old_dapi_im], dtype=np.uint16)
     # rotate segmentation
 
-    if verbose:
-        print('old_segmentation.shape: ', old_segmentation.shape)
-        print('_rot_old_M.shape: ', _rot_old_M.shape)
+    # if verbose:
+    #     print('old_dapi_im.shape: ', old_dapi_im.shape)
+    #     print('_rotation_angle: ', _rotation_angle)
+    #     print('_dz: ', _dz)
+    #     print('_dx: ', _dx)
+    #     print('_dy: ', _dy)
+    #     print('_drift.shape: ', _drift.shape)
+    #     print('_drift: ', _drift)
+    #     print('_rotation_M.shape: ', _rotation_M.shape)
+    #     print('rotation_mat.shape: ', rotation_mat.shape)
+    #     print('new_dapi_im.shape: ', new_dapi_im.shape)
+    #     print('old_segmentation.shape: ', old_segmentation.shape)
+    #     print('_rot_old_M.shape: ', _rot_old_M.shape)
 
-    _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
-                                             _rot_old_M, old_segmentation.shape, 
-                                             flags=cv2.INTER_NEAREST,
-                                             borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
+    ### NOTE: this block was probably implemented with a 2D segmentation in mind.
+    # _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
+    #                                          _rot_old_M, old_segmentation.shape, 
+    #                                          flags=cv2.INTER_NEAREST,
+    #                                          borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
+    
+    assert len(old_segmentation.shape) == 3, 'only 3D segmentation is supported!'
+
+    _rot_seg_label = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape[::-1],
+                                              flags=cv2.INTER_NEAREST,
+                                              borderMode=cv2.BORDER_CONSTANT) for _lyr in old_segmentation.astype(np.float32)], dtype=np.int32)
     if verbose:
         print(f'Segmentation for {old_segmentation} successfully rotated and translated!')
+        print('_rot_seg_label.shape: ', _rot_seg_label.shape)
 
 
     ## 3. generate cleaned_segmentation_label
@@ -2867,8 +2890,10 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         # extract cell_label
         _cell_label = np.array(_rot_seg_label==_i+1)
         # clean up cell label
-        _cell_label = ndimage.binary_erosion(_cell_label, structure=morphology.disk(1))
-        _cell_label = ndimage.binary_dilation(_cell_label, structure=morphology.disk(1))
+        selem2d = morphology.disk(1)
+        selem3d = selem2d[None, :, :]
+        _cell_label = ndimage.binary_erosion(_cell_label, structure=selem3d)
+        _cell_label = ndimage.binary_dilation(_cell_label, structure=selem3d)
         # save to cleaned labels
         _cleaned_rot_seg_label[_cell_label] = _i+1
     
