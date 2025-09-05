@@ -2343,7 +2343,7 @@ def slice_2d_image(fl, im_shape, xlims, ylims, npy_start=128, image_dtype=np.uin
 def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
                       all_channels=_allowed_colors, single_im_size=_image_size,
                       drift=np.array([0, 0, 0]), num_empty_frames=1,
-                      num_skipped_channels=0, return_limits=False, verbose=False):
+                      num_skipped_channels=0, clip=(None, None), return_limits=False, verbose=False):
     """Function to crop one image given filename, color_channel and crop_limits
     Inputs:
         filename: .dax filename for given image, string of filename
@@ -2424,6 +2424,9 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
                       _limit_diffs[2, 0]: _limit_diffs[2, 0]+crop_limits[2, 1]-crop_limits[2, 0]]
     _final_limits = np.array([_drift_limits[:, 0]+_limit_diffs[:, 0],
                               _drift_limits[:, 0]+_limit_diffs[:, 0]+crop_limits[:, 1]-crop_limits[:, 0]]).T
+    
+    # clip image
+    _crp_im = np.clip(_crp_im, a_min=clip[0], a_max=clip[1])
     if return_limits:
         return _crp_im, _final_limits
     else:
@@ -2752,12 +2755,13 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                            dna_single_im_size = _image_size,
                            old_correction_folder=_correction_folder, 
                            new_correction_folder=_correction_folder, 
-                           fft_gb=0, fft_max_disp=200, 
+                           fft_gb=0, fft_max_disp=200,
+                           illumination_corr=True, new_dapi_clip=(None, None),
                            return_new_dapi=False, verbose=True):
     """Function to translate segmentation to another given both dapi_images 
     (rotation_matrix may be provided as well)
     Inputs:
-        old_segmentation: reference segmentation to be translated, filename or 3d-np.array NOTE: originally implemented for 2d-np.array, which is no longer supported
+        old_segmentation: reference segmentation to be translated, filename or 3d-np.array or 2d-np.array
         old_dapi_im: DAPI image from original experiment, 3d-array or str
         new_dapi_im: DAPI image from new experiment, 3d-array or str
         rotation_mat: rotation matrix, adopted from align_manual_points, 2x2 ndarray or None (default by loading from file)
@@ -2797,6 +2801,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                                                single_im_size=rna_single_im_size,
                                                num_buffer_frames=num_buffer_frames, 
                                                num_empty_frames=num_empty_frames,
+                                               illumination_corr=illumination_corr,
                                                verbose=verbose) 
     # new_dapi_im
     if not isinstance(new_dapi_im, str) and not isinstance(new_dapi_im, np.ndarray) and not isinstance(new_dapi_im, np.memmap):
@@ -2811,6 +2816,8 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                                                single_im_size=dna_single_im_size,
                                                num_buffer_frames=num_buffer_frames, 
                                                num_empty_frames=num_empty_frames,
+                                               illumination_corr=illumination_corr,
+                                               clip=new_dapi_clip,
                                                verbose=verbose)
     # check dimension of rotation_matrix
     if rotation_mat is not None:
@@ -2868,21 +2875,21 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     #     print('old_segmentation.shape: ', old_segmentation.shape)
     #     print('_rot_old_M.shape: ', _rot_old_M.shape)
 
-    ### NOTE: this block was probably implemented with a 2D segmentation in mind.
-    # _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
-    #                                          _rot_old_M, old_segmentation.shape, 
-    #                                          flags=cv2.INTER_NEAREST,
-    #                                          borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
-    
-    assert len(old_segmentation.shape) == 3, 'only 3D segmentation is supported!'
+    # assert len(old_segmentation.shape) == 3, 'only 3D segmentation is supported!'
 
-    _rot_seg_label = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape[::-1],
-                                              flags=cv2.INTER_NEAREST,
-                                              borderMode=cv2.BORDER_CONSTANT) for _lyr in old_segmentation.astype(np.float32)], dtype=np.int32)
+    if len(old_segmentation.shape) == 2:
+        ### NOTE: this block was probably implemented with a 2D segmentation in mind.
+        _rot_seg_label = np.array(cv2.warpAffine(old_segmentation.astype(np.float32), 
+                                                _rot_old_M, old_segmentation.shape, 
+                                                flags=cv2.INTER_NEAREST,
+                                                borderMode=cv2.BORDER_CONSTANT), dtype=np.int32)
+    elif len(old_segmentation.shape) == 3:
+        _rot_seg_label = np.array([cv2.warpAffine(_lyr, _rot_old_M, _lyr.shape[::-1],
+                                                flags=cv2.INTER_NEAREST,
+                                                borderMode=cv2.BORDER_CONSTANT) for _lyr in old_segmentation.astype(np.float32)], dtype=np.int32)
     if verbose:
-        print(f'Segmentation for {old_segmentation} successfully rotated and translated!')
+        print(f'Segmentation successfully rotated and translated!')
         print('_rot_seg_label.shape: ', _rot_seg_label.shape)
-
 
     ## 3. generate cleaned_segmentation_label
     _cleaned_rot_seg_label = -1 * np.ones(np.shape(_rot_seg_label))

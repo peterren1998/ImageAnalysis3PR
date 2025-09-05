@@ -1610,6 +1610,7 @@ def correct_single_image(filename, channel, crop_limits=None,
                          drift=np.array([0, 0, 0]), correction_folder=_correction_folder, num_skipped_channels=0,
                          normalization=False,
                          z_shift_corr=True, hot_pixel_remove=True, illumination_corr=True, chromatic_corr=True,
+                         clip=(None, None),
                          return_limits=False, verbose=False):
     """wrapper for all correction steps to one image, used for multi-processing
     Inputs:
@@ -1678,6 +1679,7 @@ def correct_single_image(filename, channel, crop_limits=None,
                                                           num_buffer_frames=num_buffer_frames,
                                                           num_empty_frames=num_empty_frames,
                                                           num_skipped_channels=num_skipped_channels,
+                                                          clip=clip,
                                                           return_limits=True, verbose=verbose)
     ## corrections
     _corr_im = _cropped_im.copy()

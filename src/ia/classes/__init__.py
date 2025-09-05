@@ -677,6 +677,7 @@ class Cell_List():
                                     _new_correction_folder=_correction_folder,
                                     fovid_mapping_dict=None,
                                     _num_threads=12, _fft_gb=0, _fft_max_disp=200,
+                                    illumination_corr=True, new_dapi_clip=(None, None),
                                     _save=True, _save_postfix='_segmentation',
                                     replace_save_prefix_str=None, rna_channels=None,
                                     _save_npy=True, _return_all=False, _force=False, _verbose=True):
@@ -765,7 +766,8 @@ class Cell_List():
                         self.shared_parameters['rna_single_im_size'],
                         self.shared_parameters['single_im_size'],
                         _old_correction_folder, _new_correction_folder,
-                        _fft_gb, _fft_max_disp, _return_all, _verbose)
+                        _fft_gb, _fft_max_disp, illumination_corr, new_dapi_clip,
+                        _return_all, _verbose)
                 _seg_args.append(_arg)
                 _seg_fls.append(_new_fl)
             else:
@@ -781,6 +783,7 @@ class Cell_List():
                             all_channels=self.channels,
                             num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
                             num_empty_frames=self.shared_parameters['num_empty_frames'], 
+                            illumination_corr=illumination_corr
                             )
                 else:
                     _new_label, _dapi_im = pickle.load(open(_new_fl, 'rb'))
