@@ -2426,7 +2426,8 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
                               _drift_limits[:, 0]+_limit_diffs[:, 0]+crop_limits[:, 1]-crop_limits[:, 0]]).T
     
     # clip image
-    _crp_im = np.clip(_crp_im, a_min=clip[0], a_max=clip[1])
+    if clip[0] is not None or clip[1] is not None:
+        _crp_im = np.clip(_crp_im, a_min=clip[0], a_max=clip[1])
     if return_limits:
         return _crp_im, _final_limits
     else:
