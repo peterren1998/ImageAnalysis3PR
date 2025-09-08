@@ -737,19 +737,19 @@ class Cell_List():
             _new_fl = os.path.join(self.segmentation_folder,
                                 os.path.basename(_old_fl))
             if isinstance(replace_save_prefix_str, str):
-                _dapi_im_name = os.path.basename(_old_fl).replace(
+                _old_dapi_im_name = os.path.basename(_old_fl).replace(
                     replace_save_prefix_str, 'Conv_zscan_'
                 )
-                _dapi_im_name = _dapi_im_name.replace(
+                _old_dapi_im_name = _old_dapi_im_name.replace(
                     _file_postfix, '.dax'
                 )
-                _dapi_im_name = re.sub(r'Conv_zscan_(\d{1,3})\.dax', lambda m: f'Conv_zscan_{m.group(1).zfill(3)}.dax', _dapi_im_name)
+                _old_dapi_im_name = re.sub(r'Conv_zscan_(\d{1,3})\.dax', lambda m: f'Conv_zscan_{m.group(1).zfill(3)}.dax', _old_dapi_im_name)
             else:
-                _dapi_im_name = os.path.basename(_old_fl).replace(
+                _old_dapi_im_name = os.path.basename(_old_fl).replace(
                     _save_postfix+_file_postfix, '.dax')
             if fovid_mapping_dict is not None:
                 _new_fl = update_fovid_in_filename(_new_fl, fovid_mapping_dict, replace_save_prefix_str, _file_postfix)
-                _dapi_im_name = update_fovid_in_filename(_dapi_im_name, fovid_mapping_dict, 'Conv_zscan_', '.dax')
+                _new_dapi_im_name = update_fovid_in_filename(_old_dapi_im_name, fovid_mapping_dict, 'Conv_zscan_', '.dax')
             if rna_channels is None:
                 rna_channels = self.channels
             # translate new segmentation if it doesn't exists or force to generate new ones
@@ -757,7 +757,7 @@ class Cell_List():
                 if _verbose:
                     print(f"++ prepare translating segmentation label:{_old_fl}")
                 # prepare args for multi-processing
-                _arg = (_old_fl, os.path.join(old_dapi_folder, _dapi_im_name), os.path.join(_dapi_fd, _dapi_im_name),
+                _arg = (_old_fl, os.path.join(old_dapi_folder, _old_dapi_im_name), os.path.join(_dapi_fd, _new_dapi_im_name),
                         rotation_mat, None, '405', rna_channels,
                         self.channels,
                         self.shared_parameters['num_buffer_frames'], 
