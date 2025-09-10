@@ -25,6 +25,21 @@ from itertools import combinations
 import matplotlib
 import matplotlib.pyplot as plt
 
+# logging setup
+import logging
+
+def print_if_verbose(msg, verbose):
+    if verbose:
+        print(msg)
+
+def log_message(msg, logger, level=logging.INFO):
+    if logger is not None:
+        logger.log(level, msg)
+
+def log_and_print(msg, logger, level=logging.INFO):
+    print(msg)
+    log_message(msg, logger, level=level)
+
 def __init__():
     pass
 
@@ -102,9 +117,11 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                         _bead_channel='488', _all_channels=_allowed_colors, _single_im_size=_image_size,
                         _num_buffer_frames=10, _num_empty_frames=0, 
                         _ref_seed_per=95, _illumination_corr=True,
+                        seed_by_per=False,
+                        gfilt_size=0.75, background_gfilt_size=5, filt_size=3,
                         _correction_folder=_correction_folder, 
                         _match_distance=3, _match_unique=True,
-                        _rough_drift_gb=0, _drift_cutoff=1, _verbose=False):
+                        _rough_drift_gb=0, _drift_cutoff=1, _verbose=False, logger=None):
     """Function to align single pair of bead images
     Inputs:
         _filename: filename for target image containing beads, string of filename
@@ -146,10 +163,10 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
             _ref_print_name = os.path.join(_ref_filename.split(os.sep)[-2], 
                                            _ref_filename.split(os.sep)[-1])
             if _verbose:
-                print(f"- Aligning {_print_name} to {_ref_print_name}")
+                log_and_print(f"- Aligning {_print_name} to {_ref_print_name}", logger)
         else:
             if _verbose:
-                print(f"- Aligning {_print_name} to reference images and centers")
+                log_and_print(f"- Aligning {_print_name} to reference images and centers", logger)
     _drifts = []
     # for each target and reference pair, do alignment:
     for _i, _crop in enumerate(_selected_crops):
@@ -161,7 +178,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                     num_buffer_frames=_num_buffer_frames,
                                                     num_empty_frames=_num_empty_frames,
                                                     correction_folder=_correction_folder,
-                                                    illumination_corr=_illumination_corr)
+                                                    illumination_corr=_illumination_corr,
+                                                    verbose=_verbose, logger=logger)
         elif isinstance(_filename, np.ndarray):
             _tar_im = _filename[(slice(_single_im_size[0]),slice(*_crop[-2]),slice(*_crop[-1]) )]
         else:
@@ -175,14 +193,17 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                        num_buffer_frames=_num_buffer_frames,
                                                        num_empty_frames=_num_empty_frames,
                                                        correction_folder=_correction_folder,
-                                                       illumination_corr=_illumination_corr,)
+                                                       illumination_corr=_illumination_corr,
+                                                       verbose=_verbose, logger=logger)
         else:
             _ref_im = _ref_ims[_i].copy()
         print(_ref_im.shape)
         # get ref center
         if _ref_centers is None:
             _ref_center = visual_tools.get_STD_centers(
-                _ref_im, dynamic=True, th_seed_percentile=_ref_seed_per, verbose=_verbose)
+                _ref_im, dynamic=True, th_seed_percentile=_ref_seed_per, seed_by_per=seed_by_per, 
+                gfilt_size=gfilt_size, background_gfilt_size=background_gfilt_size, filt_size=filt_size,
+                verbose=_verbose)
         else:
             _ref_center = np.array(_ref_centers[_i]).copy()
         # rough align ref_im and target_im
@@ -193,9 +214,12 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                             _ref_center-_rough_drift,
                                                             dynamic=True, 
                                                             th_seed_percentile=_ref_seed_per,
+                                                            gfilt_size=gfilt_size,
+                                                            background_gfilt_size=background_gfilt_size,
+                                                            filt_size=filt_size,
                                                             search_distance=_match_distance, 
                                                             keep_unique=_match_unique,
-                                                            verbose=_verbose)
+                                                            verbose=_verbose, logger=logger)
         print(len(_matched_tar_seeds), _ref_center.shape)
         if len(_matched_tar_seeds) < len(_ref_center) * 0.2:
             _matched_tar_seeds, _find_pair = visual_tools.find_matched_seeds(
@@ -203,16 +227,22 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                         _ref_center-_rough_drift,
                                         dynamic=False,
                                         th_seed_percentile=_ref_seed_per,
+                                        gfilt_size=gfilt_size,
+                                        background_gfilt_size=background_gfilt_size,
+                                        filt_size=filt_size,
                                         search_distance=_match_distance,
                                         keep_unique=_match_unique,
-                                        verbose=_verbose)
+                                        verbose=_verbose, logger=logger)
         #print(len(_matched_tar_seeds), _rough_drift, _print_name)
         _matched_ref_center = _ref_center[_find_pair]
         if len(_matched_ref_center) == 0:
             _drifts.append(np.inf*np.ones(3))
             continue
         # apply drift to ref_center and used as seed to find target centers
-        _tar_center = visual_tools.get_STD_centers(_tar_im, seeds=_matched_tar_seeds, remove_close_pts=False)
+        _tar_center = visual_tools.get_STD_centers(_tar_im, seeds=_matched_tar_seeds, seed_by_per=seed_by_per,
+                                                   gfilt_size=gfilt_size, background_gfilt_size=background_gfilt_size,
+                                                   filt_size=filt_size,
+                                                   remove_close_pts=False, verbose=_verbose, logger=logger)
         # compare and get drift
         _drift = np.nanmean(_tar_center - _matched_ref_center , axis=0)
         _drifts.append(_drift)
@@ -229,7 +259,7 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
   
     # if not exit during loops, pick the optimal one
     if _verbose:
-        print(f"Suspecting failure for {_print_name}")
+        log_and_print(f"Suspecting failure for {_print_name}", logger)
     if len(_drifts) > 1:
     # calculate pair-wise distance
         _dists = pdist(_drifts)
@@ -238,8 +268,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
     _inds = list(combinations(range(len(_drifts)), 2))[np.argmin(_dists)]
     _selected_drifts = np.array(_drifts)[_inds, :]
     if _verbose:
-        print(
-            f"-- selected drifts:{_selected_drifts[0]}, {_selected_drifts[1]}")
+        log_and_print(
+            f"-- selected drifts:{_selected_drifts[0]}, {_selected_drifts[1]}", logger)
     _final_drift = np.mean(_selected_drifts, axis=0)
 
     return _final_drift, 1

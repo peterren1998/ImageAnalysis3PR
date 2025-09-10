@@ -39,6 +39,21 @@ Green_colors[:,2] = np.linspace(1,0,256)
 myGreens = ListedColormap(Green_colors)
 _myCmaps = [myReds, myBlues, myGreens]
 
+# logging setup
+import logging
+
+def print_if_verbose(msg, verbose):
+    if verbose:
+        print(msg)
+
+def log_message(msg, logger, level=logging.INFO):
+    if logger is not None:
+        logger.log(level, msg)
+
+def log_and_print(msg, logger, level=logging.INFO):
+    print(msg)
+    log_message(msg, logger, level=level)
+
 
 def partition_map(list_,map_, enumerate_all=False):
     """
@@ -260,9 +275,10 @@ def fit_seed_points_base(im, centers, width_z=_sigma_zxy[0], width_xy=_sigma_zxy
 def get_STD_centers(im, seeds=None, th_seed=150, 
                     dynamic=False, seed_by_per=False, th_seed_percentile=95,
                     min_num_seeds=1,
+                    gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                     remove_close_pts=True, close_threshold=0.1, fit_radius=5,
                     sort_by_h=False, save=False, save_folder='', save_name='',
-                    plt_val=False, force=False, verbose=False):
+                    plt_val=False, force=False, verbose=False, logger=None):
     '''Fit beads for one image:
     Inputs:
         im: image, ndarray
@@ -285,10 +301,10 @@ def get_STD_centers(im, seeds=None, th_seed=150,
     import pickle as pickle
     if not force and os.path.exists(save_folder+os.sep+save_name) and save_name != '':
         if verbose:
-            print("- loading file:,", save_folder+os.sep+save_name)
+            log_and_print("- loading file:,", save_folder+os.sep+save_name, logger)
         beads = pickle.load(open(save_folder+os.sep+save_name, 'rb'))
         if verbose:
-            print("--", len(beads), " of beads loaded.")
+            log_and_print("--", len(beads), " of beads loaded.", logger)
         return beads
     else:
         # seeding
@@ -297,8 +313,11 @@ def get_STD_centers(im, seeds=None, th_seed=150,
                                         th_seed_percentile=th_seed_percentile,
                                         seed_by_per=seed_by_per,
                                         min_dynamic_seeds=min_num_seeds,
-                                        gfilt_size=0.75, filt_size=3, 
-                                        th_seed=th_seed, hot_pix_th=4, verbose=verbose)
+                                        gfilt_size=gfilt_size, 
+                                        background_gfilt_size=background_gfilt_size,
+                                        filt_size=filt_size, 
+                                        th_seed=th_seed, hot_pix_th=4, verbose=verbose,
+                                        logger=logger)
         # fitting
         fitter = Fitting_v3.iter_fit_seed_points(im, seeds.T, radius_fit=5)
         fitter.firstfit()
@@ -324,9 +343,9 @@ def get_STD_centers(im, seeds=None, th_seed=150,
         else:
             beads = None
         if verbose:
-            print(f"- fitting {len(pfits)} points")
-            print(
-                f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}")
+            log_and_print(f"- fitting {len(pfits)} points", logger)
+            log_and_print(
+                f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}", logger)
         # make plot if required
         if plt_val:
             plt.figure()
@@ -338,8 +357,8 @@ def get_STD_centers(im, seeds=None, th_seed=150,
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
             if verbose:
-                print("-- saving fitted spots to",
-                      save_folder+os.sep+save_name)
+                log_and_print("-- saving fitted spots to",
+                      save_folder+os.sep+save_name, logger)
             pickle.dump(beads[:,-3:], open(save_folder+os.sep+save_name, 'wb'))
 
         return beads
@@ -1288,7 +1307,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         num_skipped_channels=0,
         save=True, save_folder=None, force=False, 
         save_npy=True, save_postfix="_segmentation",
-        make_plot=False, return_images=False, verbose=True):
+        make_plot=False, return_images=False, verbose=True, logger=None):
     """cell segmentation for DAPI images with pooling and convolution layers
     Inputs:
         ims: list of images
@@ -1335,6 +1354,8 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
     else:
         save_filenames = [os.path.join(save_folder, os.path.basename(_fl).replace('.dax', save_postfix +'.pkl')) for _fl in filenames]
     # decide if directly load
+    if verbose:
+        print('save_filenames[0]: ', save_filenames[0])
     _direct_load_flags = [True for _fl in save_filenames if os.path.exists(_fl) and not force]
     if len(_direct_load_flags) == len(filenames) and not force:
         if verbose:
@@ -1781,7 +1802,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
                          th_seed=300,
                          dynamic=True, dynamic_iters=10, min_dynamic_seeds=2, 
                          distance_to_edge=1, hot_pix_th=4, 
-                         return_h=False, verbose=False):
+                         return_h=False, verbose=False, logger=None):
     '''Get seed points with in a distance to a center coordinate
     Inputs:
         im: image, 3D-array
@@ -1815,7 +1836,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         _th_seed = th_seed
 
     if verbose:
-        print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}")
+        log_and_print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}", logger)
     # start seeding 
     if center is not None:
         _center = np.array(center, dtype=np.float32)
@@ -2758,6 +2779,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                            new_correction_folder=_correction_folder, 
                            fft_gb=0, fft_max_disp=200,
                            illumination_corr=True, new_dapi_clip=(None, None),
+                           change_seg_orientation_to_dapi=False,
                            return_new_dapi=False, verbose=True):
     """Function to translate segmentation to another given both dapi_images 
     (rotation_matrix may be provided as well)
@@ -2877,6 +2899,9 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
     #     print('_rot_old_M.shape: ', _rot_old_M.shape)
 
     # assert len(old_segmentation.shape) == 3, 'only 3D segmentation is supported!'
+
+    if change_seg_orientation_to_dapi:
+        old_segmentation = np.swapaxes(old_segmentation, 1, 2)[:,:,::-1]
 
     if len(old_segmentation.shape) == 2:
         ### NOTE: this block was probably implemented with a 2D segmentation in mind.
@@ -3142,7 +3167,7 @@ def translate_spot_coordinates(source_cell_data, target_cell_data, spots,
 def find_matched_seeds(im, ref_centers, search_distance=3, 
                        gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
                        dynamic=False, th_seed_percentile=95, th_seed=200, 
-                       keep_unique=False, verbose=True):
+                       keep_unique=False, verbose=True, logger=None):
     """Find nearby seeds for on given image for given ref_centers
     Inputs:
         im: image, np.ndarray or np.memmap
@@ -3165,13 +3190,14 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
         raise TypeError(f"Wrong input data type for im, should be np.ndarray or memmap, {type(im)} given!")
     ref_centers = np.array(ref_centers)[:,:3]
     if verbose:
-        print(f"- find seeds paired with {len(ref_centers)} centers in given image")
+        log_and_print(f"- find seeds paired with {len(ref_centers)} centers in given image", logger)
     ## start seeding
     _seeds = get_seed_in_distance(im, center=None, gfilt_size=gfilt_size, 
                                   background_gfilt_size=background_gfilt_size, 
                                   filt_size=filt_size, dynamic=dynamic, 
                                   th_seed_percentile=th_seed_percentile, 
-                                  th_seed=th_seed, return_h=True)
+                                  th_seed=th_seed, return_h=True, verbose=verbose,
+                                  logger=logger)
     ## find seed match
     _matched_seeds = []
     _find_pair = []
@@ -3196,7 +3222,7 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
     _matched_seeds = np.array(_matched_seeds)
     _find_pair = np.array(_find_pair, dtype=np.bool)
     if verbose:
-        print(f"-- {len(_matched_seeds)} paired seeds are found. ")
+        log_and_print(f"-- {len(_matched_seeds)} paired seeds are found. ", logger)
     return _matched_seeds, _find_pair
 
 # select sparse centers given candidate centers

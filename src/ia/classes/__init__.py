@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import h5py
 import ast
 
+
 _allowed_kwds = {'combo': 'c', 
                 'decoded':'d',
                 'unique': 'u', 
@@ -45,6 +46,17 @@ from . import preprocess
 
 # initialize pool
 init_dic = {}
+
+# logging setup
+import logging
+
+def print_if_verbose(msg, verbose):
+    if verbose:
+        print(msg)
+
+def log_message(msg, logger, level=logging.INFO):
+    if logger is not None:
+        logger.log(level, msg)
 
 def update_fovid_in_filename(filename, fovid_mapping_dict, prefix, postfix):
     return re.sub(f'{prefix}(\d+){postfix}', lambda m: f'{prefix}{str(fovid_mapping_dict[int(m.group(1))]).zfill(3)}{postfix}', filename)
@@ -186,7 +198,7 @@ class Cell_List():
     # initialize
     def __init__(self, parameters, _chosen_fovs=[], _exclude_fovs=[], 
                  _load_all_attr=False, _load_reference_info=True,
-                 _color_filename='Color_Usage'):
+                 _color_filename='Color_Usage', logfile=None):
         if not isinstance(parameters, dict):
             raise TypeError('wrong input type of parameters, should be a dictionary containing essential info.')
 
@@ -324,6 +336,24 @@ class Cell_List():
         # tool for iteration
         self.index = 0
 
+        self.logfile = logfile
+        if self.logfile is not None:
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                filename=self.logfile,
+                filemode='a'
+                )
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = None
+
+    def log_and_print(self, msg, level=logging.INFO):
+        print(msg)
+        self.log(msg, level=level)
+
+    def log(self, msg, level=logging.INFO):
+        log_message(msg, self.logger)
 
     # allow print info of Cell_List
     def __str__(self):
@@ -678,6 +708,7 @@ class Cell_List():
                                     fovid_mapping_dict=None,
                                     _num_threads=12, _fft_gb=0, _fft_max_disp=200,
                                     illumination_corr=True, new_dapi_clip=(None, None),
+                                    change_seg_orientation_to_dapi=False,
                                     _save=True, _save_postfix='_segmentation',
                                     replace_save_prefix_str=None, rna_channels=None,
                                     _save_npy=True, _return_all=False, _force=False, _verbose=True):
@@ -767,7 +798,7 @@ class Cell_List():
                         self.shared_parameters['single_im_size'],
                         _old_correction_folder, _new_correction_folder,
                         _fft_gb, _fft_max_disp, illumination_corr, new_dapi_clip,
-                        _return_all, _verbose)
+                        change_seg_orientation_to_dapi, _return_all, _verbose)
                 _seg_args.append(_arg)
                 _seg_fls.append(_new_fl)
             else:
@@ -777,7 +808,7 @@ class Cell_List():
                     _new_label = np.load(_new_fl)
                     if _return_all:
                         _dapi_im = corrections.correct_single_image(os.path.join(
-                            _dapi_fd, _dapi_im_name), self.channels[self.dapi_channel_index],
+                            _dapi_fd, _new_dapi_im_name), self.channels[self.dapi_channel_index],
                             correction_folder=self.correction_folder,
                             single_im_size=self.shared_parameters['single_im_size'], 
                             all_channels=self.channels,
@@ -832,7 +863,7 @@ class Cell_List():
                      _load_segmentation=True, _load_drift=True, _drift_size=500, _drift_ref=0, 
                      _drift_postfix='_sequential_current_cor.pkl', _dynamic=True, 
                      _load_cell=True, _exclude_attrs=[],
-                     _save=False, _append_cell_list=False, _verbose=True):
+                     _save=False, _append_cell_list=False, _verbose=True, logger=None):
         """Function to create one cell_data object"""
         if _verbose:
             print(f"+ creating cell for fov:{_parameter['fov_id']}, cell:{_parameter['cell_id']}")
@@ -860,10 +891,38 @@ class Cell_List():
 
     def _create_cells_fov(self, _fov_ids, _num_threads=None, _sequential_mode=False, _plot_segmentation=True, 
                           _load_segmentation=True, _load_exist_info=True, _exclude_attrs=[],
-                          _color_filename='Color_Usage', _load_annotated_only=True,
+                          _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
+                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
-                          _dynamic=True, _save=False, _force_drift=False, _stringent=True, _verbose=True):
+                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True):
         """Create Cele_data objects for one field of view"""
+        settings_msg = f'''
+        + Creating Cell_Data objects for fov_ids: {_fov_ids}
+        -- num_threads: {_num_threads}
+        -- sequential_mode: {_sequential_mode}
+        -- plot_segmentation: {_plot_segmentation}
+        -- load_segmentation: {_load_segmentation}
+        -- load_exist_info: {_load_exist_info}
+        -- exclude_attrs: {_exclude_attrs}
+        -- color_filename: {_color_filename}
+        -- load_annotated_only: {_load_annotated_only}
+        -- seed_by_per: {seed_by_per}
+        -- th_seed_per: {th_seed_per}
+        -- gfilt_size: {gfilt_size}
+        -- background_gfilt_size: {background_gfilt_size}
+        -- filt_size: {filt_size}
+        -- drift_size: {_drift_size}
+        -- drift_ref: {_drift_ref}
+        -- drift_postfix: {_drift_postfix}
+        -- coord_sel: {_coord_sel}
+        -- dynamic: {_dynamic}
+        -- save: {_save}
+        -- save_postfix: {_save_postfix}
+        -- force_drift: {_force_drift}
+        -- stringent: {_stringent}
+        -- verbose: {_verbose}
+        '''
+        self.log(settings_msg)
         if not _num_threads:
             _num_threads = int(self.num_threads)
         if isinstance(_fov_ids, int):
@@ -873,8 +932,8 @@ class Cell_List():
                 raise ValueError("Wrong fov_id kwd given! \
                     this should be real fov-number that allowed during intiation of class.")
         if _verbose:
-            print(f"+ Create Cell_Data objects for field of view: {_fov_ids}")
-            print("++ preparing variables")
+            self.log_and_print("++ preparing variables")
+            self.log_and_print(f"+ Create Cell_Data objects for field of view: {_fov_ids}")
         # whether load annotated hybs only
         if _load_annotated_only:
             _folders = self.annotated_folders
@@ -890,7 +949,7 @@ class Cell_List():
                 _dapi_fd = [_full_fd for _full_fd in _folders if os.path.basename(_full_fd) == _fd]
                 if len(_dapi_fd) == 1:
                     if _verbose:
-                        print(f"++ choose dapi images from folder: {_dapi_fd[0]}.")
+                        self.log_and_print(f"++ choose dapi images from folder: {_dapi_fd[0]}.")
                     _dapi_fd = _dapi_fd[0]
                     _select_dapi = True  # successfully selected dapi
         if not _select_dapi:
@@ -899,7 +958,8 @@ class Cell_List():
         _args = []
         for _fov_id in _fov_ids:
             if _verbose:
-                print("+ Load segmentation for fov", _fov_id)
+                self.log_and_print("+ Load segmentation for fov", _fov_id)
+                self.log_and_print('+ Loading segmentation from : ', os.path.join(_dapi_fd, self.fovs[_fov_id]))
             # do segmentation if necessary, or just load existing segmentation file
             _fov_segmentation_labels = visual_tools.DAPI_convoluted_segmentation(
                 os.path.join(_dapi_fd, self.fovs[_fov_id]), self.channels[self.dapi_channel_index],
@@ -910,7 +970,8 @@ class Cell_List():
                 illumination_correction=self.shared_parameters['corr_illumination'],
                 correction_folder=self.correction_folder, 
                 num_threads=_num_threads, make_plot=_plot_segmentation, return_images=False,
-                save=_save, save_npy=True, save_folder=self.segmentation_folder, force=False,verbose=_verbose)
+                save=_save, save_npy=True, save_folder=self.segmentation_folder, 
+                save_postfix=_save_postfix, force=False,verbose=_verbose, logger=self.logger)
             # extract result segmentation and image
             _fov_segmentation_label = _fov_segmentation_labels[0]
             # make plot if necesary
@@ -931,24 +992,29 @@ class Cell_List():
                     _direct_load_drift = True
             if not _direct_load_drift:
                 if _verbose:
-                    print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}")
+                    self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}")
                 _drift, _failed_count = corrections.Calculate_Bead_Drift(_folders, self.fovs, _fov_id, 
                                             num_threads=_num_threads, sequential_mode=_sequential_mode, 
                                             single_im_size=self.shared_parameters['single_im_size'], 
                                             all_channels=self.channels,
                                             num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
                                             num_empty_frames=self.shared_parameters['num_empty_frames'], 
+                                            num_skipped_channels=self.shared_parameters['num_skipped_channels'],
+                                            seed_by_per=seed_by_per,
+                                            gfilt_size=gfilt_size,
+                                            background_gfilt_size=background_gfilt_size,
+                                            filt_size=filt_size,
                                             illumination_corr=self.shared_parameters['corr_illumination'],
                                             correction_folder=self.correction_folder,
                                             ref_id=_drift_ref, drift_size=_drift_size, save_postfix=_drift_postfix, 
                                             coord_sel=_coord_sel, stringent=_stringent,
-                                            ref_seed_per=90,
-                                            overwrite=_force_drift, verbose=_verbose)
+                                            ref_seed_per=th_seed_per,
+                                            overwrite=_force_drift, verbose=_verbose, logger=self.logger)
 
             # create cells in parallel
             _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
             if _verbose:
-                print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}")
+                self.log_and_print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}")
             _params = [{'fov_id': _fov_id,
                       'cell_id': _cell_id,
                       'folders': self.folders,
@@ -980,12 +1046,12 @@ class Cell_List():
                        _direct_load_drift, _drift_size, _drift_ref, 
                        _drift_postfix, _dynamic, _load_exist_info, 
                        _exclude_attrs, _save, 
-                       False, _verbose) for _p in _params]
+                       False, _verbose, self.logger) for _p in _params]
             del(_fov_segmentation_label, _params, _cell_ids)
 
         ## do multi-processing to create cells!
         if _verbose:
-            print(f"+ Creating {len(_args)} cells with {_num_threads} threads.")
+            self.log_and_print(f"+ Creating {len(_args)} cells with {_num_threads} threads.")
         _cell_pool = mp.Pool(_num_threads)
         _cells = _cell_pool.starmap(self._create_cell, _args, chunksize=1)
         _cell_pool.close()

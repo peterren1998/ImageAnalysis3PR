@@ -13,6 +13,21 @@ import multiprocessing as mp
 import ctypes
 from scipy.ndimage.interpolation import map_coordinates
 
+# logging setup
+import logging
+
+def print_if_verbose(msg, verbose):
+    if verbose:
+        print(msg)
+
+def log_message(msg, logger, level=logging.INFO):
+    if logger is not None:
+        logger.log(level, msg)
+
+def log_and_print(msg, logger, level=logging.INFO):
+    print(msg)
+    log_message(msg, logger, level=level)
+
 def __init__():
     pass
 
@@ -22,11 +37,13 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                          sequential_mode=False, bead_channel='488', all_channels=_allowed_colors,
                          illumination_corr=True, correction_folder=_correction_folder,
                          coord_sel=None, single_im_size=_image_size, 
-                         num_buffer_frames=10, num_empty_frames=1, 
+                         num_buffer_frames=10, num_empty_frames=1, num_skipped_channels=0,
+                         seed_by_per=False,
+                         gfilt_size=0.75, background_gfilt_size=5, filt_size=3,
                          match_distance=3, match_unique=True, rough_drift_gb=0,
                          max_ref_points=500, ref_seed_per=90, drift_cutoff=1,
                          save=True, save_folder=None, save_postfix='_current_cor.pkl',
-                         stringent=True, overwrite=False, verbose=True):
+                         stringent=True, overwrite=False, verbose=True, logger=None):
     """Function to generate drift profile given a list of corrected bead files
     Inputs:
         folders: hyb-folder names planned for drift-correction, list of folders
@@ -84,7 +101,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
             f"No save_folder specified, use default save-folder:{save_folder}")
     elif not os.path.exists(save_folder):
         if verbose:
-            print(f"Create drift_folder:{save_folder}")
+            log_and_print(f"Create drift_folder:{save_folder}", logger)
         os.makedirs(save_folder)
     # check save_name
     if sequential_mode:  # if doing drift-correction in a sequential mode:
@@ -117,20 +134,20 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     # try to load existing profiles
     if not overwrite and os.path.isfile(_save_filename):
         if verbose:
-            print(f"- loading existing drift info from file:{_save_filename}")
+            log_and_print(f"- loading existing drift info from file:{_save_filename}", logger)
         old_drift_dic = pickle.load(open(_save_filename, 'rb'))
         _exist_keys = [os.path.join(os.path.basename(
             _fd), _fov_name) in old_drift_dic for _fd in folders]
         if sum(_exist_keys) == len(folders):
             if verbose:
-                print("-- all frames exists in original drift file, exit.")
+                log_and_print("-- all frames exists in original drift file, exit.", logger)
             return old_drift_dic, 0
 
     # no existing profile or force to do de novo correction:
     else:
         if verbose:
-            print(
-                f"- starting a new drift correction for field-of-view:{_fov_name}")
+            log_and_print(
+                f"- starting a new drift correction for field-of-view:{_fov_name}", logger)
         old_drift_dic = {}
     ## initialize drift correction
     _start_time = time.time()  # record start time
@@ -147,14 +164,14 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
             # if ref-frame not overlapping, remove the old one for now
             if old_ref_frame != os.path.join(os.path.basename(folders[ref_id]), _fov_name):
                 if verbose:
-                    print(
-                        f"-- old-ref:{old_ref_frame}, delete old refs because ref doesn't match")
+                    log_and_print(
+                        f"-- old-ref:{old_ref_frame}, delete old refs because ref doesn't match", logger)
                 del old_drift_dic[old_ref_frame]
     else:
         old_ref_frame = None
     if not sequential_mode:
         if verbose:
-            print(f"- Start drift-correction with {num_threads} threads, image mapped to image:{ref_id}")
+            log_and_print(f"- Start drift-correction with {num_threads} threads, image mapped to image:{ref_id}", logger)
         ## get all reference information
         # ref filename
         _ref_filename = os.path.join(
@@ -164,16 +181,21 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
         _ref_ims = []
         _ref_centers = []
         if verbose:
-            print("--- loading reference images and centers")
+            log_and_print("--- loading reference images and centers", logger)
         for _crop in selected_crops:
             _ref_im = correct_single_image(_ref_filename, bead_channel, crop_limits=_crop,
                                         single_im_size=single_im_size, all_channels=all_channels, 
                                         num_buffer_frames=num_buffer_frames,
                                         num_empty_frames=num_empty_frames,
                                         correction_folder=correction_folder,
-                                        illumination_corr=illumination_corr, verbose=verbose)
+                                        illumination_corr=illumination_corr, 
+                                        num_skipped_channels=num_skipped_channels, verbose=verbose, logger=logger)
             _ref_center = visual_tools.get_STD_centers(_ref_im, dynamic=True, th_seed_percentile=ref_seed_per,
-                                                       sort_by_h=True, verbose=verbose)
+                                                       seed_by_per=seed_by_per,
+                                                       gfilt_size=gfilt_size,
+                                                       background_gfilt_size=background_gfilt_size,
+                                                       filt_size=filt_size,
+                                                       sort_by_h=True, verbose=verbose, logger=logger)
             # limit ref points
             if max_ref_points > 0:
                 _ref_center = np.array(_ref_center)[:max(
@@ -194,9 +216,10 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                 args.append((_filename, selected_crops, None, _ref_ims, _ref_centers,
                              bead_channel, all_channels, single_im_size,
                              num_buffer_frames, num_empty_frames,
-                             ref_seed_per * 0.999**_i, illumination_corr,
+                             ref_seed_per * 0.999**_i, illumination_corr, seed_by_per,
+                             gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique, 
-                             rough_drift_gb, drift_cutoff, verbose))
+                             rough_drift_gb, drift_cutoff, verbose, logger))
     
     ## sequential mode
     else:
@@ -216,14 +239,15 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                 args.append((_filename, selected_crops, _ref_filename, None, None,
                              bead_channel, all_channels, single_im_size,
                              num_buffer_frames, num_empty_frames,
-                             ref_seed_per, illumination_corr,
+                             ref_seed_per, illumination_corr, seed_by_per,
+                             gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique,
-                             rough_drift_gb, drift_cutoff, verbose))
+                             rough_drift_gb, drift_cutoff, verbose, logger))
 
     ## multiprocessing
     if verbose:
-        print(
-            f"-- Start multi-processing drift correction with {num_threads} threads")
+        log_and_print(
+            f"-- Start multi-processing drift correction with {num_threads} threads", logger)
     with mp.Pool(num_threads) as drift_pool:
         align_results = drift_pool.starmap(alignment_tools.align_single_image, args)
         drift_pool.close()
@@ -254,7 +278,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     if old_ref_frame is not None and old_ref_frame in new_drift_dic:
         ref_drift = new_drift_dic[old_ref_frame]
         if verbose:
-            print(f"-- drift of reference: {ref_drift}")
+            log_and_print(f"-- drift of reference: {ref_drift}", logger)
         # update drift in old ones
         for _old_name, _old_dft in old_drift_dic.items():
             if _old_name not in new_drift_dic:
@@ -262,18 +286,18 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     ## save
     if save:
         if verbose:
-            print(f"- Saving drift to file:{_save_filename}")
+            log_and_print(f"- Saving drift to file:{_save_filename}", logger)
         if not os.path.exists(os.path.dirname(_save_filename)):
             if verbose:
-                print(
-                    f"-- creating save-folder: {os.path.dirname(_save_filename)}")
+                log_and_print(
+                    f"-- creating save-folder: {os.path.dirname(_save_filename)}", logger)
             os.makedirs(os.path.dirname(_save_filename))
         pickle.dump(new_drift_dic, open(_save_filename, 'wb'))
     if verbose:
-        print(
-            f"-- Total time cost in drift correction: {time.time()-_start_time}")
+        log_and_print(
+            f"-- Total time cost in drift correction: {time.time()-_start_time}", logger)
         if fail_count > 0:
-            print(f"-- number of failed drifts: {fail_count}")
+            log_and_print(f"-- number of failed drifts: {fail_count}", logger)
 
     return new_drift_dic, fail_count
 
@@ -284,7 +308,8 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
                             all_channels=_allowed_colors, single_im_size=_image_size, 
                             cropped_profile=None, correction_folder=_correction_folder,
                             profile_dtype=np.float32, image_dtype=np.uint16,
-                            ic_profile_name='illumination_correction', correction_power=1, verbose=True):
+                            ic_profile_name='illumination_correction', correction_power=1, verbose=True,
+                            logger=None):
     """Function to do fast illumination correction in a RAM-efficient manner
     Inputs:
         im: 3d image, np.ndarray or np.memmap
@@ -305,7 +330,7 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
         raise ValueError(
             f"Wrong input type for im: {type(im)}, np.ndarray or np.memmap expected")
     if verbose:
-        print(f"-- correcting illumination for image size:{im.shape} for channel:{correction_channel}")
+        log_and_print(f"-- correcting illumination for image size:{im.shape} for channel:{correction_channel}", logger)
     # channel
     channel = str(correction_channel)
     if channel not in all_channels:
@@ -370,7 +395,7 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
                                      all_channels=_allowed_colors, single_im_size=_image_size,
                                      drift=np.array([0,0,0]), correction_folder=_correction_folder, 
                                      profile_dtype=np.float32, image_dtype=np.uint16,
-                                     cc_profile_name='chromatic_correction', verbose=True):
+                                     cc_profile_name='chromatic_correction', verbose=True, logger=None):
     """Chromatic abbrevation correction for given image and crop
         im: 3d image, np.ndarray or np.memmap
         correction_channel: the color channel for given image, int or string (should be in single_im_size list)
@@ -392,7 +417,7 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
         raise ValueError(
             f"Wrong input type for im: {type(im)}, np.ndarray or np.memmap expected")
     if verbose:
-        print(f"-- correcting chromatic aberrtion for image size:{im.shape}, channel:{correction_channel}")
+        log_and_print(f"-- correcting chromatic aberrtion for image size:{im.shape}, channel:{correction_channel}", logger)
     # correction channel
     correction_channel = str(correction_channel)
     if correction_channel not in all_channels:
@@ -404,8 +429,8 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
     # if no correction required, directly return
     if correction_channel == target_channel:
         if verbose:
-            print(
-                f"--- no chromatic aberrtion required for channel:{correction_channel}")
+            log_and_print(
+                f"--- no chromatic aberrtion required for channel:{correction_channel}", logger)
         return im
     
     # check correction profile exists:
@@ -476,10 +501,10 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
     return _corr_im
 
 # correct for illumination _shifts across z layers
-def Z_Shift_Correction(im, dtype=np.uint16, normalization=False, verbose=False):
+def Z_Shift_Correction(im, dtype=np.uint16, normalization=False, verbose=False, logger=None):
     '''Function to correct for each layer in z, to make sure they match in term of intensity'''
     if verbose:
-        print("-- correcting Z axis illumination shifts.")
+        log_and_print("-- correcting Z axis illumination shifts.", logger)
     if not normalization:
         _nim = im / np.median(im, axis=(1, 2))[:,np.newaxis,np.newaxis] * np.median(im)
     else:
@@ -488,10 +513,10 @@ def Z_Shift_Correction(im, dtype=np.uint16, normalization=False, verbose=False):
 
 # remove hot pixels
 def Remove_Hot_Pixels(im, dtype=np.uint16, hot_pix_th=0.50, hot_th=4, 
-                      interpolation_style='nearest', verbose=False):
+                      interpolation_style='nearest', verbose=False, logger=None):
     '''Function to remove hot pixels by interpolation in each single layer'''
     if verbose:
-        print("-- removing hot pixels")
+        log_and_print("-- removing hot pixels", logger)
     # create convolution matrix, ignore boundaries for now
     _conv = (np.roll(im,1,1)+np.roll(im,-1,1)+np.roll(im,1,2)+np.roll(im,1,2))/4
     # hot pixels must be have signals higher than average of neighboring pixels by hot_th in more than hot_pix_th*total z-stacks
@@ -1611,7 +1636,7 @@ def correct_single_image(filename, channel, crop_limits=None,
                          normalization=False,
                          z_shift_corr=True, hot_pixel_remove=True, illumination_corr=True, chromatic_corr=True,
                          clip=(None, None),
-                         return_limits=False, verbose=False):
+                         return_limits=False, verbose=False, logger=None):
     """wrapper for all correction steps to one image, used for multi-processing
     Inputs:
         filename: full filename of a dax_file or npy_file for one image, string
@@ -1668,7 +1693,7 @@ def correct_single_image(filename, channel, crop_limits=None,
     _ref_name = os.path.join(filename.split(
         os.sep)[-2], filename.split(os.sep)[-1])
     if verbose:
-        print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}")
+        log_and_print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}", logger)
     _full_im_shape, _num_color = get_img_info.get_num_frame(filename,
                                                             frame_per_color=single_im_size[0],
                                                             buffer_frame=num_buffer_frames)
@@ -1680,33 +1705,33 @@ def correct_single_image(filename, channel, crop_limits=None,
                                                           num_empty_frames=num_empty_frames,
                                                           num_skipped_channels=num_skipped_channels,
                                                           clip=clip,
-                                                          return_limits=True, verbose=verbose)
+                                                          return_limits=True, verbose=verbose, logger=logger)
     ## corrections
     _corr_im = _cropped_im.copy()
     if z_shift_corr:
         # correct for z axis shift
         _corr_im = Z_Shift_Correction(
-            _corr_im,  normalization=normalization, verbose=verbose)
+            _corr_im,  normalization=normalization, verbose=verbose, logger=logger)
     elif not z_shift_corr and normalization:
         # normalize if not doing z_shift_corr
         _corr_im = _corr_im / np.median(_corr_im)
     if hot_pixel_remove:
         # correct for hot pixels
-        _corr_im = Remove_Hot_Pixels(_corr_im, hot_th=3, verbose=verbose)
+        _corr_im = Remove_Hot_Pixels(_corr_im, hot_th=3, verbose=verbose, logger=logger)
     if illumination_corr:
         # illumination correction
         _corr_im = Illumination_correction(_corr_im, channel,
                                            crop_limits=_dft_limits,
                                            correction_folder=correction_folder,
                                            single_im_size=single_im_size,
-                                           verbose=verbose)
+                                           verbose=verbose, logger=logger)
     if chromatic_corr:
         # chromatic correction
         _corr_im = Chromatic_abbrevation_correction(_corr_im, channel,
                                                     single_im_size=single_im_size,
                                                     crop_limits=_dft_limits,
                                                     correction_folder=correction_folder,
-                                                    verbose=verbose)
+                                                    verbose=verbose, logger=logger)
     ## return
     if return_limits:
         return _corr_im, _dft_limits
