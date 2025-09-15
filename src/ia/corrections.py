@@ -1693,10 +1693,10 @@ def correct_single_image(filename, channel, crop_limits=None,
     _ref_name = os.path.join(filename.split(
         os.sep)[-2], filename.split(os.sep)[-1])
     if verbose:
-        log_and_print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}", logger)
+        log_and_print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}, frame_per_color:{single_im_size[0]}", logger)
     _full_im_shape, _num_color = get_img_info.get_num_frame(filename,
                                                             frame_per_color=single_im_size[0],
-                                                            buffer_frame=num_buffer_frames)
+                                                            buffer_frame=num_buffer_frames, verbose=verbose)
     # crop image
     _cropped_im, _dft_limits = visual_tools.crop_single_image(filename, channel, crop_limits=_limits,
                                                           all_channels=all_channels,
@@ -1705,7 +1705,7 @@ def correct_single_image(filename, channel, crop_limits=None,
                                                           num_empty_frames=num_empty_frames,
                                                           num_skipped_channels=num_skipped_channels,
                                                           clip=clip,
-                                                          return_limits=True, verbose=verbose, logger=logger)
+                                                          return_limits=True, verbose=verbose)
     ## corrections
     _corr_im = _cropped_im.copy()
     if z_shift_corr:

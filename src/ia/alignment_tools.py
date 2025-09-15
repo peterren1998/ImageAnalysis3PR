@@ -214,6 +214,7 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                             _ref_center-_rough_drift,
                                                             dynamic=True, 
                                                             th_seed_percentile=_ref_seed_per,
+                                                            seed_by_per=seed_by_per,
                                                             gfilt_size=gfilt_size,
                                                             background_gfilt_size=background_gfilt_size,
                                                             filt_size=filt_size,
@@ -227,6 +228,7 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                         _ref_center-_rough_drift,
                                         dynamic=False,
                                         th_seed_percentile=_ref_seed_per,
+                                        seed_by_per=seed_by_per,
                                         gfilt_size=gfilt_size,
                                         background_gfilt_size=background_gfilt_size,
                                         filt_size=filt_size,
@@ -234,6 +236,9 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                         keep_unique=_match_unique,
                                         verbose=_verbose, logger=logger)
         #print(len(_matched_tar_seeds), _rough_drift, _print_name)
+        if _verbose:
+            log_and_print(f'-- {len(_matched_tar_seeds)} out of {len(_ref_center)} ref seeds were matched in crop {_i} in target {_print_name}', logger)
+
         _matched_ref_center = _ref_center[_find_pair]
         if len(_matched_ref_center) == 0:
             _drifts.append(np.inf*np.ones(3))
@@ -250,6 +255,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
         if len(_drifts) > 1:
             # calculate pair-wise distance
             _dists = pdist(_drifts)
+            if _verbose:
+                log_and_print(f'-- calculated drifts:{_drifts}, pair-wise distances:{_dists} for target{_print_name} after crop round {len(_drifts)}', logger)
             # check whether any two of drifts are close enough
             if (_dists < _drift_cutoff).any():
                 _inds = list(combinations(range(len(_drifts)), 2))[np.argmin(_dists)]

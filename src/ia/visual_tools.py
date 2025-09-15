@@ -344,8 +344,9 @@ def get_STD_centers(im, seeds=None, th_seed=150,
             beads = None
         if verbose:
             log_and_print(f"- fitting {len(pfits)} points", logger)
-            log_and_print(
-                f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}", logger)
+            if remove_close_pts:
+                log_and_print(
+                    f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}", logger)
         # make plot if required
         if plt_val:
             plt.figure()
@@ -1827,6 +1828,8 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         raise ValueError('wrong input dimension of center!')
     _dim = np.shape(im)
     _im = im.copy()
+    if verbose:
+        log_and_print(f'-- original seed threshold:  {th_seed}. original percentile: {th_seed_percentile}', logger)
     # seeding threshold
     if seed_by_per:
         _im_ints = _im[np.isnan(_im)==False].astype(np.float32)
@@ -1836,7 +1839,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         _th_seed = th_seed
 
     if verbose:
-        log_and_print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}", logger)
+        log_and_print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}. seed_by_per: {seed_by_per}.", logger)
     # start seeding 
     if center is not None:
         _center = np.array(center, dtype=np.float32)
@@ -2364,7 +2367,8 @@ def slice_2d_image(fl, im_shape, xlims, ylims, npy_start=128, image_dtype=np.uin
 def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
                       all_channels=_allowed_colors, single_im_size=_image_size,
                       drift=np.array([0, 0, 0]), num_empty_frames=1,
-                      num_skipped_channels=0, clip=(None, None), return_limits=False, verbose=False):
+                      num_skipped_channels=0, clip=(None, None), return_limits=False, verbose=False,
+                      logger=None):
     """Function to crop one image given filename, color_channel and crop_limits
     Inputs:
         filename: .dax filename for given image, string of filename
@@ -3166,7 +3170,7 @@ def translate_spot_coordinates(source_cell_data, target_cell_data, spots,
 # find nearby seeds for given center references, used in bead-drift
 def find_matched_seeds(im, ref_centers, search_distance=3, 
                        gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
-                       dynamic=False, th_seed_percentile=95, th_seed=200, 
+                       dynamic=False, th_seed_percentile=95, th_seed=200, seed_by_per=False,
                        keep_unique=False, verbose=True, logger=None):
     """Find nearby seeds for on given image for given ref_centers
     Inputs:
@@ -3196,7 +3200,8 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
                                   background_gfilt_size=background_gfilt_size, 
                                   filt_size=filt_size, dynamic=dynamic, 
                                   th_seed_percentile=th_seed_percentile, 
-                                  th_seed=th_seed, return_h=True, verbose=verbose,
+                                  th_seed=th_seed, seed_by_per=seed_by_per,
+                                  return_h=True, verbose=verbose,
                                   logger=logger)
     ## find seed match
     _matched_seeds = []

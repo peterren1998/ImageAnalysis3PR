@@ -301,6 +301,8 @@ class Cell_List():
             self.shared_parameters['corr_chromatic'] = True
         if 'allowed_kwds' not in self.shared_parameters:
             self.shared_parameters['allowed_data_types'] = _allowed_kwds
+        if 'num_skipped_channels' not in self.shared_parameters:
+            self.shared_parameters['num_skipped_channels'] = 0
 
         ## chosen field of views
         if len(_chosen_fovs) == 0: # no specification

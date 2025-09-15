@@ -724,6 +724,8 @@ def decode_match_raw(raw_data_folder, raw_feature, decode_data_folder, decode_fe
 def get_num_frame(dax_filename, frame_per_color=_image_size[0], buffer_frame=10, verbose=False):
     """Function to extract image size and number of colors"""
     ## check input
+    if verbose:
+        print(f'Extracting frame nums for {dax_filename}...')
     if '.dax' not in dax_filename:
         raise ValueError(
             f"Wrong input type, .dax file expected for {dax_filename}")
@@ -742,7 +744,8 @@ def get_num_frame(dax_filename, frame_per_color=_image_size[0], buffer_frame=10,
             _num_frame = int(_line.split('=')[1])
             _num_color = (_num_frame - 2*buffer_frame) / frame_per_color
             if _num_color != int(_num_color):
-                raise ValueError("Wrong num_color, should be integer!")
+                raise ValueError(f"Wrong num_color, should be integer! File: {dax_filename}, \
+num_frame: {_num_frame}. num_color: {_num_color}, buffer_frame: {buffer_frame}, frame_per_color: {frame_per_color}")
             _num_color = int(_num_color)
         if "frame dimensions" in _line:
             _dx = int(_line.split('=')[1].split('x')[0])
