@@ -896,7 +896,8 @@ class Cell_List():
                           _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
                           gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
-                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True):
+                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
+                          spots_save_fileid=None):
         """Create Cele_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
@@ -923,7 +924,15 @@ class Cell_List():
         -- force_drift: {_force_drift}
         -- stringent: {_stringent}
         -- verbose: {_verbose}
+        -- spots_save_fileid: {spots_save_fileid}
         '''
+        if spots_save_fileid is not None:
+            # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
+            spots_save_fileid = os.path.join(self.drift_folder, os.path.splitext(os.path.basename(spots_save_fileid))[0])
+            if not os.path.exists(self.drift_folder):
+                os.makedirs(self.drift_folder)
+            if _verbose:
+                self.log_and_print(f'++ saving spot information as {spots_save_fileid}')
         self.log(settings_msg)
         if not _num_threads:
             _num_threads = int(self.num_threads)
@@ -1011,7 +1020,8 @@ class Cell_List():
                                             ref_id=_drift_ref, drift_size=_drift_size, save_postfix=_drift_postfix, 
                                             coord_sel=_coord_sel, stringent=_stringent,
                                             ref_seed_per=th_seed_per,
-                                            overwrite=_force_drift, verbose=_verbose, logger=self.logger)
+                                            overwrite=_force_drift, verbose=_verbose, logger=self.logger,
+                                            spots_save_fileid=spots_save_fileid)
 
             # create cells in parallel
             _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
@@ -2840,6 +2850,9 @@ class Cell_Data():
                 _folders = self.folders
             # load existing drift file 
             _drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', _drift_postfix))
+            if _verbose:
+                self.log_and_print(f'++ Saving drift file to {_drift_filename}...')
+            
             _sequential_drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', '_sequential'+_drift_postfix))
             # check drift filename and sequential file name:
             # whether with sequential mode determines the order to load files
@@ -2873,7 +2886,7 @@ class Cell_Data():
                                         illumination_corr=self.shared_parameters['corr_illumination'],
                                         save_postfix=_drift_postfix,
                                         save_folder=self.drift_folder, stringent=_stringent,
-                                        overwrite=_force, verbose=_verbose)
+                                        overwrite=_force, verbose=_verbose, drift_folder=self.drift_folder)
             if _verbose:
                 print(f"- drift correction for {len(_drift)} frames has been generated.")
             _exist = [os.path.join(os.path.basename(_fd),self.fovs[self.fov_id]) for _fd in _folders \

@@ -121,7 +121,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                         gfilt_size=0.75, background_gfilt_size=5, filt_size=3,
                         _correction_folder=_correction_folder, 
                         _match_distance=3, _match_unique=True,
-                        _rough_drift_gb=0, _drift_cutoff=1, _verbose=False, logger=None):
+                        _rough_drift_gb=0, _drift_cutoff=1, _verbose=False, logger=None,
+                        spots_save_fileid=None):
     """Function to align single pair of bead images
     Inputs:
         _filename: filename for target image containing beads, string of filename
@@ -208,7 +209,9 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
             _ref_center = np.array(_ref_centers[_i]).copy()
         # rough align ref_im and target_im
         _rough_drift = fft3d_from2d(_ref_im, _tar_im, gb=_rough_drift_gb)
-        print(f"rough drift:{_rough_drift}")
+        if _verbose:
+            log_and_print(f'-- {len(_ref_center)} ref seeds were found in crop {_i} in {_print_name}', logger)
+            log_and_print(f'-- crop {_i}, rough drift between reference and target is {_rough_drift} in {_print_name}', logger)
         # based on ref_center and rough_drift, find matched_ref_center
         _matched_tar_seeds, _find_pair = visual_tools.find_matched_seeds(_tar_im, 
                                                             _ref_center-_rough_drift,
@@ -248,15 +251,28 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                    gfilt_size=gfilt_size, background_gfilt_size=background_gfilt_size,
                                                    filt_size=filt_size,
                                                    remove_close_pts=False, verbose=_verbose, logger=logger)
+        if spots_save_fileid is not None:
+            all_ref_spots_filename = os.path.splitext(spots_save_fileid)[0]+f'_im{_print_name.replace("/", "-").rstrip(".dax").replace("_", "")}_crop{_i}_all_ref_spots.csv'
+            matched_ref_spots_filename = os.path.splitext(spots_save_fileid)[0]+f'_im{_print_name.replace("/", "-").rstrip(".dax").replace("_", "")}_crop{_i}_matched_ref_spots.csv'
+            target_spots_filename = os.path.splitext(spots_save_fileid)[0]+f'_im{_print_name.replace("/", "-").rstrip(".dax").replace("_", "")}_crop{_i}_matched_target_spots.csv'
+
+            np.savetxt(all_ref_spots_filename, _ref_center, fmt='%.3e', delimiter=',')
+            if _verbose: log_and_print(f'-- saved spots to {all_ref_spots_filename}', logger)
+            np.savetxt(matched_ref_spots_filename, _matched_ref_center, fmt='%.3e', delimiter=',')
+            if _verbose: log_and_print(f'-- saved spots to {matched_ref_spots_filename}', logger)
+            np.savetxt(target_spots_filename, _tar_center, fmt='%.3e', delimiter=',')
+            if _verbose: log_and_print(f'-- saved spots to {target_spots_filename}', logger)
+
         # compare and get drift
         _drift = np.nanmean(_tar_center - _matched_ref_center , axis=0)
         _drifts.append(_drift)
+            
         # compare difference and exit if two drifts close enough
         if len(_drifts) > 1:
             # calculate pair-wise distance
             _dists = pdist(_drifts)
             if _verbose:
-                log_and_print(f'-- calculated drifts:{_drifts}, pair-wise distances:{_dists} for target{_print_name} after crop round {len(_drifts)}', logger)
+                log_and_print(f'-- calculated drifts:{_drifts}, pair-wise distances:{_dists} for target {_print_name} after crop round {len(_drifts)}', logger)
             # check whether any two of drifts are close enough
             if (_dists < _drift_cutoff).any():
                 _inds = list(combinations(range(len(_drifts)), 2))[np.argmin(_dists)]
@@ -276,7 +292,7 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
     _selected_drifts = np.array(_drifts)[_inds, :]
     if _verbose:
         log_and_print(
-            f"-- selected drifts:{_selected_drifts[0]}, {_selected_drifts[1]}", logger)
+            f"-- selected drifts in {_print_name}:{_selected_drifts[0]}, {_selected_drifts[1]}", logger)
     _final_drift = np.mean(_selected_drifts, axis=0)
 
     return _final_drift, 1

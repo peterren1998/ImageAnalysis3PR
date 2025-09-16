@@ -43,7 +43,8 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                          match_distance=3, match_unique=True, rough_drift_gb=0,
                          max_ref_points=500, ref_seed_per=90, drift_cutoff=1,
                          save=True, save_folder=None, save_postfix='_current_cor.pkl',
-                         stringent=True, overwrite=False, verbose=True, logger=None):
+                         stringent=True, overwrite=False, verbose=True, logger=None,
+                         spots_save_fileid=None, drift_folder='drift'):
     """Function to generate drift profile given a list of corrected bead files
     Inputs:
         folders: hyb-folder names planned for drift-correction, list of folders
@@ -96,7 +97,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     # check save-folder
     if save_folder is None:
         save_folder = os.path.join(
-            os.path.dirname(folders[0]), 'Analysis', 'drift')
+            os.path.dirname(folders[0]), 'Analysis', drift_folder)
         print(
             f"No save_folder specified, use default save-folder:{save_folder}")
     elif not os.path.exists(save_folder):
@@ -219,7 +220,8 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                              ref_seed_per * 0.999**_i, illumination_corr, seed_by_per,
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique, 
-                             rough_drift_gb, drift_cutoff, verbose, logger))
+                             rough_drift_gb, drift_cutoff, verbose, logger,
+                             spots_save_fileid))
     
     ## sequential mode
     else:
@@ -242,7 +244,8 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                              ref_seed_per, illumination_corr, seed_by_per,
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique,
-                             rough_drift_gb, drift_cutoff, verbose, logger))
+                             rough_drift_gb, drift_cutoff, verbose, logger,
+                             spots_save_fileid))
 
     ## multiprocessing
     if verbose:
