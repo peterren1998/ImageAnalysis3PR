@@ -50,8 +50,9 @@ def log_message(msg, logger, level=logging.INFO):
     if logger is not None:
         logger.log(level, msg)
 
-def log_and_print(msg, logger, level=logging.INFO):
-    print(msg)
+def log_and_print(msg, logger, level=logging.INFO, verbose=True):
+    if verbose:
+        print(msg)
     log_message(msg, logger, level=level)
 
 
@@ -278,7 +279,8 @@ def get_STD_centers(im, seeds=None, th_seed=150,
                     gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                     remove_close_pts=True, close_threshold=0.1, fit_radius=5,
                     sort_by_h=False, save=False, save_folder='', save_name='',
-                    plt_val=False, force=False, verbose=False, logger=None):
+                    plt_val=False, force=False, verbose=False, logger=None,
+                    plt_save_filename=None, plt_save=False, return_bottom_n_seeds=None):
     '''Fit beads for one image:
     Inputs:
         im: image, ndarray
@@ -309,7 +311,7 @@ def get_STD_centers(im, seeds=None, th_seed=150,
     else:
         # seeding
         if seeds is None:
-            seeds = get_seed_in_distance(im, center=None, dynamic=dynamic,
+            seeds, new_thresh = get_seed_in_distance(im, center=None, dynamic=dynamic,
                                         th_seed_percentile=th_seed_percentile,
                                         seed_by_per=seed_by_per,
                                         min_dynamic_seeds=min_num_seeds,
@@ -317,7 +319,8 @@ def get_STD_centers(im, seeds=None, th_seed=150,
                                         background_gfilt_size=background_gfilt_size,
                                         filt_size=filt_size, 
                                         th_seed=th_seed, hot_pix_th=4, verbose=verbose,
-                                        logger=logger)
+                                        logger=logger, return_new_thresh=True,
+                                        return_bottom_n_seeds=return_bottom_n_seeds)
         # fitting
         fitter = Fitting_v3.iter_fit_seed_points(im, seeds.T, radius_fit=5)
         fitter.firstfit()
@@ -342,24 +345,32 @@ def get_STD_centers(im, seeds=None, th_seed=150,
                 beads = beads[remove==False]
         else:
             beads = None
-        if verbose:
-            log_and_print(f"- fitting {len(pfits)} points", logger)
-            if remove_close_pts:
-                log_and_print(
-                    f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}", logger)
+        log_and_print(f"- fitting {len(pfits)} points", logger, verbose=verbose)
+        if remove_close_pts:
+            log_and_print(
+                f"-- {np.sum(remove)} points removed given smallest distance {close_threshold}", logger, verbose=verbose)
         # make plot if required
         if plt_val:
-            plt.figure()
-            plt.imshow(np.max(im, 0), interpolation='nearest')
-            plt.plot(beads[:, -1], beads[:, -2], 'or')
-            plt.show()
+            fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(14, 6))
+            min, max = auto_limits(im)
+            print('(min, max) auto: ', min, max)
+            im_fig = ax0.imshow(np.max(im, axis=0), vmin=min, vmax=max, interpolation='nearest', cmap='grey')
+            fig.colorbar(im_fig)
+            ax0.plot(beads[:, -1], beads[:, -2], 'or')
+            im_fig = ax1.imshow(np.max(im, axis=0), vmin=min, vmax=max, interpolation='nearest', cmap='grey')
+            fig.colorbar(im_fig)
+            plt.suptitle(f'{beads.shape[0]} beads, th{new_thresh}, file {os.path.splitext(os.path.basename(plt_save_filename))[0]}')
+            if plt_save:
+                plt.savefig(plt_save_filename)
+            else:
+                plt.show()
+            plt.close()
         # save to pickle if specified
         if save:
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
-            if verbose:
-                log_and_print("-- saving fitted spots to",
-                      save_folder+os.sep+save_name, logger)
+            log_and_print("-- saving fitted spots to",
+                    save_folder+os.sep+save_name, logger, verbose=verbose)
             pickle.dump(beads[:,-3:], open(save_folder+os.sep+save_name, 'wb'))
 
         return beads
@@ -1800,10 +1811,10 @@ def crop_cell(im, segmentation_label, drift=None, extend_dim=20, overlap_thresho
 def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
                          seed_by_per=False, th_seed_percentile=95, 
-                         th_seed=300,
+                         th_seed=300, return_bottom_n_seeds=None,
                          dynamic=True, dynamic_iters=10, min_dynamic_seeds=2, 
                          distance_to_edge=1, hot_pix_th=4, 
-                         return_h=False, verbose=False, logger=None):
+                         return_h=False, verbose=False, logger=None, return_new_thresh=False):
     '''Get seed points with in a distance to a center coordinate
     Inputs:
         im: image, 3D-array
@@ -1828,8 +1839,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         raise ValueError('wrong input dimension of center!')
     _dim = np.shape(im)
     _im = im.copy()
-    if verbose:
-        log_and_print(f'-- original seed threshold:  {th_seed}. original percentile: {th_seed_percentile}', logger)
+    log_and_print(f'-- original seed threshold:  {th_seed}. original percentile: {th_seed_percentile}', logger, verbose=verbose)
     # seeding threshold
     if seed_by_per:
         _im_ints = _im[np.isnan(_im)==False].astype(np.float32)
@@ -1838,8 +1848,7 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
     else:
         _th_seed = th_seed
 
-    if verbose:
-        log_and_print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}. seed_by_per: {seed_by_per}.", logger)
+    log_and_print(f"-- seeding with threshold: {_th_seed}, per={th_seed_percentile}. seed_by_per: {seed_by_per}.", logger, verbose=verbose)
     # start seeding 
     if center is not None:
         _center = np.array(center, dtype=np.float32)
@@ -1894,6 +1903,10 @@ def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
         _seeds = _seeds[:3].transpose()
     else:
         _seeds = _seeds[:4].transpose()
+    if return_bottom_n_seeds is not None:
+        _seeds = _seeds[-return_bottom_n_seeds:,:]
+    if return_new_thresh:
+        return _seeds, _th_seed
     return _seeds
 
 # fit single gaussian with varying width given prior
@@ -3171,7 +3184,7 @@ def translate_spot_coordinates(source_cell_data, target_cell_data, spots,
 def find_matched_seeds(im, ref_centers, search_distance=3, 
                        gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
                        dynamic=False, th_seed_percentile=95, th_seed=200, seed_by_per=False,
-                       keep_unique=False, verbose=True, logger=None):
+                       keep_unique=False, verbose=True, logger=None, return_bottom_n_seeds=None):
     """Find nearby seeds for on given image for given ref_centers
     Inputs:
         im: image, np.ndarray or np.memmap
@@ -3193,16 +3206,16 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
     if not isinstance(im, np.ndarray) and not isinstance(im, np.memmap):
         raise TypeError(f"Wrong input data type for im, should be np.ndarray or memmap, {type(im)} given!")
     ref_centers = np.array(ref_centers)[:,:3]
-    if verbose:
-        log_and_print(f"- find seeds paired with {len(ref_centers)} centers in given image", logger)
+    log_and_print(f"- find seeds paired with {len(ref_centers)} centers in given image", logger, verbose=verbose)
     ## start seeding
-    _seeds = get_seed_in_distance(im, center=None, gfilt_size=gfilt_size, 
+    _seeds, _ = get_seed_in_distance(im, center=None, gfilt_size=gfilt_size, 
                                   background_gfilt_size=background_gfilt_size, 
                                   filt_size=filt_size, dynamic=dynamic, 
                                   th_seed_percentile=th_seed_percentile, 
                                   th_seed=th_seed, seed_by_per=seed_by_per,
                                   return_h=True, verbose=verbose,
-                                  logger=logger)
+                                  logger=logger, return_new_thresh=True,
+                                  return_bottom_n_seeds=return_bottom_n_seeds)
     ## find seed match
     _matched_seeds = []
     _find_pair = []
@@ -3226,8 +3239,7 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
     # return
     _matched_seeds = np.array(_matched_seeds)
     _find_pair = np.array(_find_pair, dtype=np.bool)
-    if verbose:
-        log_and_print(f"-- {len(_matched_seeds)} paired seeds are found. ", logger)
+    log_and_print(f"-- {len(_matched_seeds)} paired seeds are found. ", logger, verbose=verbose)
     return _matched_seeds, _find_pair
 
 # select sparse centers given candidate centers
@@ -3439,3 +3451,75 @@ def reconstruct_image(spots, image_size, use_intensity=False,
         _im = add_source(_im, _spot[1:4], h=_h, sig=_stds, )
     
     return _im
+
+### From ChatGPT 5 Pro
+def auto_limits(img, method="hybrid", 
+                low=2.0, high=99.8,      # percentiles for percentile-based part
+                nsig_lo=1.0, nsig_hi=6.0, # k for MAD-based caps
+                exclude_zeros=True):
+    """
+    Compute robust display limits (a_min, a_max) for an image.
+
+    Parameters
+    ----------
+    img : array-like
+        2D (or nD) image.
+    method : {"percentile","mad","hybrid"}
+        - "percentile": use np.percentile(low, high)
+        - "mad": use median ± k·MAD (MAD scaled to sigma via 1.4826)
+        - "hybrid": low from percentile, high = min(hi_percentile, median+nsig_hi*sigma_MAD)
+    low, high : float
+        Percentiles used in percentile/hybrid methods (0–100).
+    nsig_lo, nsig_hi : float
+        Multipliers for MAD-based low/high limits.
+    exclude_zeros : bool
+        Ignore exact zeros when estimating limits (useful if your background is zero-filled).
+
+    Returns
+    -------
+    a_min, a_max : float
+    """
+    a = np.asarray(img).astype(np.float64, copy=False)
+    m = np.isfinite(a)
+    if exclude_zeros:
+        m &= (a != 0)
+    data = a[m]
+
+    # Fallback if mask removed everything
+    if data.size == 0:
+        # If image is constant or all zero, just return a tiny window
+        val = float(np.nanmean(a)) if np.any(np.isfinite(a)) else 0.0
+        return val - 0.5, val + 0.5
+
+    if method == "percentile":
+        lo, hi = np.percentile(data, (low, high))
+
+    elif method == "mad":
+        med = np.median(data)
+        mad = np.median(np.abs(data - med))
+        sigma = 1.4826 * mad  # robust sigma
+        lo = med - nsig_lo * sigma
+        hi = med + nsig_hi * sigma
+
+    elif method == "hybrid":
+        # Lower bound from low percentile; upper bound is the tighter of:
+        #   (high percentile) and (median + nsig_hi*sigma_MAD)
+        med = np.median(data)
+        mad = np.median(np.abs(data - med))
+        sigma = 1.4826 * mad
+        lo_p, hi_p = np.percentile(data, (low, high))
+        lo = lo_p if np.isfinite(lo_p) else med - nsig_lo * sigma
+        hi_mad = med + nsig_hi * sigma
+        hi = np.nanmin([hi_p, hi_mad]) if np.isfinite(hi_p) else hi_mad
+    else:
+        raise ValueError("method must be 'percentile', 'mad', or 'hybrid'")
+
+    # Sanity/fallbacks
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        lo, hi = float(np.nanmin(data)), float(np.nanmax(data))
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+            # Constant image edge case
+            med = float(np.nanmedian(data))
+            lo, hi = med - 0.5, med + 0.5
+
+    return float(lo), float(hi)

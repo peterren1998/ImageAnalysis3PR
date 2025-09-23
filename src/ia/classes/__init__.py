@@ -350,8 +350,9 @@ class Cell_List():
         else:
             self.logger = None
 
-    def log_and_print(self, msg, level=logging.INFO):
-        print(msg)
+    def log_and_print(self, msg, level=logging.INFO, verbose=True):
+        if verbose:
+            print(msg)
         self.log(msg, level=level)
 
     def log(self, msg, level=logging.INFO):
@@ -897,7 +898,7 @@ class Cell_List():
                           gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
                           _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
-                          spots_save_fileid=None):
+                          spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
         """Create Cele_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
@@ -925,14 +926,16 @@ class Cell_List():
         -- stringent: {_stringent}
         -- verbose: {_verbose}
         -- spots_save_fileid: {spots_save_fileid}
+        -- plt_val: {plt_val}
+        -- plt_save: {plt_save}
+        -- return_bottom_n_seeds: {return_bottom_n_seeds}
         '''
         if spots_save_fileid is not None:
             # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
             spots_save_fileid = os.path.join(self.drift_folder, os.path.splitext(os.path.basename(spots_save_fileid))[0])
             if not os.path.exists(self.drift_folder):
                 os.makedirs(self.drift_folder)
-            if _verbose:
-                self.log_and_print(f'++ saving spot information as {spots_save_fileid}')
+            self.log_and_print(f'++ saving spot information as {spots_save_fileid}', verbose=_verbose)
         self.log(settings_msg)
         if not _num_threads:
             _num_threads = int(self.num_threads)
@@ -942,9 +945,8 @@ class Cell_List():
             if _fov_id not in self.fov_ids:
                 raise ValueError("Wrong fov_id kwd given! \
                     this should be real fov-number that allowed during intiation of class.")
-        if _verbose:
-            self.log_and_print("++ preparing variables")
-            self.log_and_print(f"+ Create Cell_Data objects for field of view: {_fov_ids}")
+        self.log_and_print("++ preparing variables", verbose=_verbose)
+        self.log_and_print(f"+ Create Cell_Data objects for field of view: {_fov_ids}", verbose=_verbose)
         # whether load annotated hybs only
         if _load_annotated_only:
             _folders = self.annotated_folders
@@ -959,8 +961,7 @@ class Cell_List():
             if len(_info) >= self.dapi_channel_index+1 and _info[self.dapi_channel_index] == 'DAPI':
                 _dapi_fd = [_full_fd for _full_fd in _folders if os.path.basename(_full_fd) == _fd]
                 if len(_dapi_fd) == 1:
-                    if _verbose:
-                        self.log_and_print(f"++ choose dapi images from folder: {_dapi_fd[0]}.")
+                    self.log_and_print(f"++ choose dapi images from folder: {_dapi_fd[0]}.", verbose=_verbose)
                     _dapi_fd = _dapi_fd[0]
                     _select_dapi = True  # successfully selected dapi
         if not _select_dapi:
@@ -968,9 +969,8 @@ class Cell_List():
         ## load segmentation for this fov
         _args = []
         for _fov_id in _fov_ids:
-            if _verbose:
-                self.log_and_print("+ Load segmentation for fov", _fov_id)
-                self.log_and_print('+ Loading segmentation from : ', os.path.join(_dapi_fd, self.fovs[_fov_id]))
+            self.log_and_print("+ Load segmentation for fov", _fov_id, verbose=_verbose)
+            self.log_and_print('+ Loading segmentation from : ', os.path.join(_dapi_fd, self.fovs[_fov_id]), verbose=_verbose)
             # do segmentation if necessary, or just load existing segmentation file
             _fov_segmentation_labels = visual_tools.DAPI_convoluted_segmentation(
                 os.path.join(_dapi_fd, self.fovs[_fov_id]), self.channels[self.dapi_channel_index],
@@ -1002,8 +1002,7 @@ class Cell_List():
                 if len(_exist) == len(self.annotated_folders):
                     _direct_load_drift = True
             if not _direct_load_drift:
-                if _verbose:
-                    self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}")
+                self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}", verbose=_verbose)
                 _drift, _failed_count = corrections.Calculate_Bead_Drift(_folders, self.fovs, _fov_id, 
                                             num_threads=_num_threads, sequential_mode=_sequential_mode, 
                                             single_im_size=self.shared_parameters['single_im_size'], 
@@ -1017,16 +1016,17 @@ class Cell_List():
                                             filt_size=filt_size,
                                             illumination_corr=self.shared_parameters['corr_illumination'],
                                             correction_folder=self.correction_folder,
-                                            ref_id=_drift_ref, drift_size=_drift_size, save_postfix=_drift_postfix, 
+                                            ref_id=_drift_ref, drift_size=_drift_size, save_folder=self.drift_folder,
+                                            save_postfix=_drift_postfix, 
                                             coord_sel=_coord_sel, stringent=_stringent,
                                             ref_seed_per=th_seed_per,
                                             overwrite=_force_drift, verbose=_verbose, logger=self.logger,
-                                            spots_save_fileid=spots_save_fileid)
+                                            spots_save_fileid=spots_save_fileid, plt_val=plt_val, plt_save=plt_save,
+                                            return_bottom_n_seeds=return_bottom_n_seeds)
 
             # create cells in parallel
             _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
-            if _verbose:
-                self.log_and_print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}")
+            self.log_and_print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}", verbose=_verbose)
             _params = [{'fov_id': _fov_id,
                       'cell_id': _cell_id,
                       'folders': self.folders,
@@ -1062,8 +1062,7 @@ class Cell_List():
             del(_fov_segmentation_label, _params, _cell_ids)
 
         ## do multi-processing to create cells!
-        if _verbose:
-            self.log_and_print(f"+ Creating {len(_args)} cells with {_num_threads} threads.")
+        self.log_and_print(f"+ Creating {len(_args)} cells with {_num_threads} threads.", verbose=_verbose)
         _cell_pool = mp.Pool(_num_threads)
         _cells = _cell_pool.starmap(self._create_cell, _args, chunksize=1)
         _cell_pool.close()
@@ -2850,8 +2849,7 @@ class Cell_Data():
                 _folders = self.folders
             # load existing drift file 
             _drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', _drift_postfix))
-            if _verbose:
-                self.log_and_print(f'++ Saving drift file to {_drift_filename}...')
+            self.log_and_print(f'++ Saving drift file to {_drift_filename}...', verbose=_verbose)
             
             _sequential_drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', '_sequential'+_drift_postfix))
             # check drift filename and sequential file name:

@@ -24,8 +24,9 @@ def log_message(msg, logger, level=logging.INFO):
     if logger is not None:
         logger.log(level, msg)
 
-def log_and_print(msg, logger, level=logging.INFO):
-    print(msg)
+def log_and_print(msg, logger, level=logging.INFO, verbose=True):
+    if verbose:
+        print(msg)
     log_message(msg, logger, level=level)
 
 def __init__():
@@ -44,7 +45,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                          max_ref_points=500, ref_seed_per=90, drift_cutoff=1,
                          save=True, save_folder=None, save_postfix='_current_cor.pkl',
                          stringent=True, overwrite=False, verbose=True, logger=None,
-                         spots_save_fileid=None, drift_folder='drift'):
+                         spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
     """Function to generate drift profile given a list of corrected bead files
     Inputs:
         folders: hyb-folder names planned for drift-correction, list of folders
@@ -83,6 +84,9 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
         raise ValueError("Kwd folders should have at least one element")
     if not isinstance(fovs, list):
         raise ValueError("Wrong input type of fovs, should be a list")
+    if plt_save and spots_save_fileid is None:
+        raise ValueError('Must provide saved spots filename to save plots')
+
     # check if all images exists
     _fov_name = fovs[fov_id]
     for _fd in folders:
@@ -97,16 +101,20 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     # check save-folder
     if save_folder is None:
         save_folder = os.path.join(
-            os.path.dirname(folders[0]), 'Analysis', drift_folder)
+            os.path.dirname(folders[0]), 'Analysis', 'drift')
         print(
             f"No save_folder specified, use default save-folder:{save_folder}")
     elif not os.path.exists(save_folder):
         if verbose:
             log_and_print(f"Create drift_folder:{save_folder}", logger)
         os.makedirs(save_folder)
+
     # check save_name
     if sequential_mode:  # if doing drift-correction in a sequential mode:
         save_postfix = '_sequential'+save_postfix
+        if spots_save_fileid is not None or plt_save:
+            log_and_print(f'sequential mode does not support spots_save_fileid or plt_save parameters', logger,
+                          level=logging.WARNING)
 
     # check coord_sel
     if coord_sel is None:
@@ -164,15 +172,13 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
             old_ref_frame = old_ref_frames[0]
             # if ref-frame not overlapping, remove the old one for now
             if old_ref_frame != os.path.join(os.path.basename(folders[ref_id]), _fov_name):
-                if verbose:
-                    log_and_print(
-                        f"-- old-ref:{old_ref_frame}, delete old refs because ref doesn't match", logger)
+                log_and_print(
+                    f"-- old-ref:{old_ref_frame}, delete old refs because ref doesn't match", logger, verbose=verbose)
                 del old_drift_dic[old_ref_frame]
     else:
         old_ref_frame = None
     if not sequential_mode:
-        if verbose:
-            log_and_print(f"- Start drift-correction with {num_threads} threads, image mapped to image:{ref_id}", logger)
+        log_and_print(f"- Start drift-correction with {num_threads} threads, image mapped to image:{ref_id}", logger, verbose=verbose)
         ## get all reference information
         # ref filename
         _ref_filename = os.path.join(
@@ -181,9 +187,18 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
             os.path.basename(folders[ref_id]), _fov_name)
         _ref_ims = []
         _ref_centers = []
-        if verbose:
-            log_and_print("--- loading reference images and centers", logger)
-        for _crop in selected_crops:
+        log_and_print("--- loading reference images and centers", logger, verbose=verbose)
+        for crop_num, _crop in enumerate(selected_crops):
+            if plt_val:
+                plt_save_filename = os.path.join(save_folder, f'fovid{fov_id}_im{os.path.basename(folders[ref_id])}_crop{crop_num}')
+            log_and_print(f'--- Correcting crop{crop_num} of {_ref_filename} with illumination corr {illumination_corr}:\
+bead_channel: {bead_channel}\
+single_im_size: {single_im_size}\
+all_channels: {all_channels}\
+ num_buffer_frames: {num_buffer_frames}\
+num_empty_frames: {num_empty_frames}\
+illumination_corr: {illumination_corr}\
+num_skipped_channels: {num_skipped_channels}', logger, verbose=verbose)
             _ref_im = correct_single_image(_ref_filename, bead_channel, crop_limits=_crop,
                                         single_im_size=single_im_size, all_channels=all_channels, 
                                         num_buffer_frames=num_buffer_frames,
@@ -196,7 +211,15 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                                                        gfilt_size=gfilt_size,
                                                        background_gfilt_size=background_gfilt_size,
                                                        filt_size=filt_size,
-                                                       sort_by_h=True, verbose=verbose, logger=logger)
+                                                       sort_by_h=True, verbose=verbose, logger=logger, plt_val=plt_val,
+                                                       plt_save_filename=plt_save_filename,
+                                                       plt_save=plt_save, return_bottom_n_seeds=return_bottom_n_seeds)
+            if spots_save_fileid is not None:
+                    all_ref_spots_filename = os.path.join(os.path.dirname(spots_save_fileid),
+                        f'fovid{fov_id}_im{os.path.basename(folders[ref_id])}_crop{crop_num}_all_ref_spots.csv')
+                    np.savetxt(all_ref_spots_filename, _ref_center, fmt='%.3e', delimiter=',')
+                    log_and_print(f'-- saved ref spots to {all_ref_spots_filename}', logger, verbose=verbose)
+
             # limit ref points
             if max_ref_points > 0:
                 _ref_center = np.array(_ref_center)[:max(
@@ -221,7 +244,7 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique, 
                              rough_drift_gb, drift_cutoff, verbose, logger,
-                             spots_save_fileid))
+                             spots_save_fileid, plt_val, return_bottom_n_seeds))
     
     ## sequential mode
     else:
@@ -245,12 +268,11 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique,
                              rough_drift_gb, drift_cutoff, verbose, logger,
-                             spots_save_fileid))
+                             spots_save_fileid, plt_val, return_bottom_n_seeds))
 
     ## multiprocessing
-    if verbose:
-        log_and_print(
-            f"-- Start multi-processing drift correction with {num_threads} threads", logger)
+    log_and_print(
+        f"-- Start multi-processing drift correction with {num_threads} threads", logger, verbose=verbose)
     with mp.Pool(num_threads) as drift_pool:
         align_results = drift_pool.starmap(alignment_tools.align_single_image, args)
         drift_pool.close()
@@ -280,27 +302,23 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
     new_drift_dic[_ref_keyname] = np.zeros(3)  # for ref frame, assign to zero
     if old_ref_frame is not None and old_ref_frame in new_drift_dic:
         ref_drift = new_drift_dic[old_ref_frame]
-        if verbose:
-            log_and_print(f"-- drift of reference: {ref_drift}", logger)
+        log_and_print(f"-- drift of reference: {ref_drift}", logger, verbose=verbose)
         # update drift in old ones
         for _old_name, _old_dft in old_drift_dic.items():
             if _old_name not in new_drift_dic:
                 new_drift_dic[_old_name] = _old_dft + ref_drift
     ## save
     if save:
-        if verbose:
-            log_and_print(f"- Saving drift to file:{_save_filename}", logger)
+        log_and_print(f"- Saving drift to file:{_save_filename}", logger, verbose=verbose)
         if not os.path.exists(os.path.dirname(_save_filename)):
-            if verbose:
-                log_and_print(
-                    f"-- creating save-folder: {os.path.dirname(_save_filename)}", logger)
+            log_and_print(
+                f"-- creating save-folder: {os.path.dirname(_save_filename)}", logger, verbose=verbose)
             os.makedirs(os.path.dirname(_save_filename))
         pickle.dump(new_drift_dic, open(_save_filename, 'wb'))
-    if verbose:
-        log_and_print(
-            f"-- Total time cost in drift correction: {time.time()-_start_time}", logger)
-        if fail_count > 0:
-            log_and_print(f"-- number of failed drifts: {fail_count}", logger)
+    log_and_print(
+        f"-- Total time cost in drift correction: {time.time()-_start_time}", logger, verbose=verbose)
+    if fail_count > 0:
+        log_and_print(f"-- number of failed drifts: {fail_count}", logger, verbose=verbose)
 
     return new_drift_dic, fail_count
 
@@ -332,8 +350,7 @@ def Illumination_correction(im, correction_channel, crop_limits=None,
     if not isinstance(im, np.ndarray) and not isinstance(im, np.memmap):
         raise ValueError(
             f"Wrong input type for im: {type(im)}, np.ndarray or np.memmap expected")
-    if verbose:
-        log_and_print(f"-- correcting illumination for image size:{im.shape} for channel:{correction_channel}", logger)
+    log_and_print(f"-- correcting illumination for image size:{im.shape} for channel:{correction_channel}", logger, verbose=verbose)
     # channel
     channel = str(correction_channel)
     if channel not in all_channels:
@@ -419,8 +436,7 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
     if not isinstance(im, np.ndarray) and not isinstance(im, np.memmap):
         raise ValueError(
             f"Wrong input type for im: {type(im)}, np.ndarray or np.memmap expected")
-    if verbose:
-        log_and_print(f"-- correcting chromatic aberrtion for image size:{im.shape}, channel:{correction_channel}", logger)
+    log_and_print(f"-- correcting chromatic aberrtion for image size:{im.shape}, channel:{correction_channel}", logger, verbose=verbose)
     # correction channel
     correction_channel = str(correction_channel)
     if correction_channel not in all_channels:
@@ -431,9 +447,8 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
         raise ValueError(f"Input channel:{target_channel} is not in allowed channels:{all_channels}")
     # if no correction required, directly return
     if correction_channel == target_channel:
-        if verbose:
-            log_and_print(
-                f"--- no chromatic aberrtion required for channel:{correction_channel}", logger)
+        log_and_print(
+            f"--- no chromatic aberrtion required for channel:{correction_channel}", logger, verbose=verbose)
         return im
     
     # check correction profile exists:
@@ -506,8 +521,7 @@ def Chromatic_abbrevation_correction(im, correction_channel, target_channel='647
 # correct for illumination _shifts across z layers
 def Z_Shift_Correction(im, dtype=np.uint16, normalization=False, verbose=False, logger=None):
     '''Function to correct for each layer in z, to make sure they match in term of intensity'''
-    if verbose:
-        log_and_print("-- correcting Z axis illumination shifts.", logger)
+    log_and_print("-- correcting Z axis illumination shifts.", logger, verbose=verbose)
     if not normalization:
         _nim = im / np.median(im, axis=(1, 2))[:,np.newaxis,np.newaxis] * np.median(im)
     else:
@@ -518,8 +532,7 @@ def Z_Shift_Correction(im, dtype=np.uint16, normalization=False, verbose=False, 
 def Remove_Hot_Pixels(im, dtype=np.uint16, hot_pix_th=0.50, hot_th=4, 
                       interpolation_style='nearest', verbose=False, logger=None):
     '''Function to remove hot pixels by interpolation in each single layer'''
-    if verbose:
-        log_and_print("-- removing hot pixels", logger)
+    log_and_print("-- removing hot pixels", logger, verbose=verbose)
     # create convolution matrix, ignore boundaries for now
     _conv = (np.roll(im,1,1)+np.roll(im,-1,1)+np.roll(im,1,2)+np.roll(im,1,2))/4
     # hot pixels must be have signals higher than average of neighboring pixels by hot_th in more than hot_pix_th*total z-stacks
@@ -1695,8 +1708,8 @@ def correct_single_image(filename, channel, crop_limits=None,
     ## load image
     _ref_name = os.path.join(filename.split(
         os.sep)[-2], filename.split(os.sep)[-1])
-    if verbose:
-        log_and_print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}, frame_per_color:{single_im_size[0]}", logger)
+    log_and_print(f"- Correcting {_ref_name}, channel:{channel}, params:{num_buffer_frames},{num_empty_frames}, frame_per_color:{single_im_size[0]}",
+                  logger, verbose=verbose)
     _full_im_shape, _num_color = get_img_info.get_num_frame(filename,
                                                             frame_per_color=single_im_size[0],
                                                             buffer_frame=num_buffer_frames, verbose=verbose)
