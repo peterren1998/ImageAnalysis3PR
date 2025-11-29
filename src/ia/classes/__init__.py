@@ -890,7 +890,7 @@ class Cell_List():
         # load segmentation
         if _load_segmentation and (not hasattr(_cell, 'segmentation_label') or not hasattr(_cell, 'segmentation_crop')):
             _cell._load_segmentation(_load_in_ram=True)
-        # load drift  v
+        # load drift
         if _load_drift and not _cell._check_drift(_verbose=False):
             _cell._load_drift(_num_threads=self.num_threads, _size=_drift_size, _ref_id=_drift_ref, _drift_postfix=_drift_postfix,
                                _dynamic=_dynamic, _force=False, _verbose=_verbose)
@@ -898,6 +898,33 @@ class Cell_List():
         if _load_cell and os.path.exists(os.path.join(_cell.save_folder, 'cell_info.pkl')):
             _cell._load_from_file('cell_info', _exclude_attrs=_exclude_attrs,
                                   _overwrite=False, _verbose=_verbose)
+        if _save:
+            _cell._save_to_file('cell_info')
+        # whether directly store
+        if _append_cell_list:
+            self.cells.append(_cell)
+        return _cell
+    
+    def _create_cell_nodrift(self, _parameter, _load_info=True, _color_filename='Color_Usage',
+                     _load_segmentation=True,
+                     _load_cell=True, _exclude_attrs=[],
+                     _save=False, _append_cell_list=False, _verbose=True, logger=None):
+        """Function to create one cell_data object"""
+        if _verbose:
+            print(f"+ creating cell for fov:{_parameter['fov_id']}, cell:{_parameter['cell_id']}")
+        _cell = Cell_Data(_parameter, _load_all_attr=True, _load_reference_info=False)
+        if _load_info:
+            if not hasattr(_cell, 'color_dic') or not hasattr(_cell, 'channels'):
+                _cell._load_color_info(_color_filename=_color_filename)
+        # load segmentation
+        if _load_segmentation and (not hasattr(_cell, 'segmentation_label') or not hasattr(_cell, 'segmentation_crop')):
+            _cell._load_segmentation(_load_in_ram=True)
+        # load cell_info
+        if _load_cell and os.path.exists(os.path.join(_cell.save_folder, 'cell_info.pkl')):
+            _cell._load_from_file('cell_info', _exclude_attrs=_exclude_attrs,
+                                  _overwrite=False, _verbose=_verbose)
+        # Initialize drift as None
+        _cell.drift = None
         if _save:
             _cell._save_to_file('cell_info')
         # whether directly store
@@ -1099,11 +1126,9 @@ class Cell_List():
 
     def _create_cells_fov_nodrift(self, _fov_ids, _num_threads=None, _sequential_mode=False, _plot_segmentation=True, 
                           _load_segmentation=True, _load_exist_info=True, _exclude_attrs=[],
-                          _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
-                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
-                          _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
-                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
-                          spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
+                          _color_filename='Color_Usage', _load_annotated_only=True,
+                          _save=False, _save_postfix='_segmentation', _verbose=True,
+                          plt_val=False, plt_save=False):
         """Create Cell_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
@@ -1115,25 +1140,12 @@ class Cell_List():
         -- exclude_attrs: {_exclude_attrs}
         -- color_filename: {_color_filename}
         -- load_annotated_only: {_load_annotated_only}
-        -- seed_by_per: {seed_by_per}
-        -- th_seed_per: {th_seed_per}
-        -- gfilt_size: {gfilt_size}
-        -- background_gfilt_size: {background_gfilt_size}
-        -- filt_size: {filt_size}
-        -- drift_size: {_drift_size}
-        -- drift_ref: {_drift_ref}
-        -- drift_postfix: {_drift_postfix}
-        -- coord_sel: {_coord_sel}
-        -- dynamic: {_dynamic}
         -- save: {_save}
         -- save_postfix: {_save_postfix}
-        -- force_drift: {_force_drift}
-        -- stringent: {_stringent}
         -- verbose: {_verbose}
         -- spots_save_fileid: {spots_save_fileid}
         -- plt_val: {plt_val}
         -- plt_save: {plt_save}
-        -- return_bottom_n_seeds: {return_bottom_n_seeds}
         '''
         if spots_save_fileid is not None:
             # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
@@ -1197,37 +1209,6 @@ class Cell_List():
                 plt.colorbar()
                 plt.title(f"Segmentation result for fov:{self.fovs[_fov_id]}")
                 plt.show()
-            # check whether can directly load drift
-            _direct_load_drift = False
-            _drift_filename = os.path.join(self.drift_folder, self.fovs[_fov_id].replace('.dax', _drift_postfix))
-            if os.path.isfile(_drift_filename):
-                _drift = pickle.load(open(_drift_filename, 'rb'))
-                _exist = [os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) for _fd in _folders \
-                        if os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) in _drift]
-                if len(_exist) == len(self.annotated_folders):
-                    _direct_load_drift = True
-            if not _direct_load_drift:
-                self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}", verbose=_verbose)
-                _drift, _failed_count = corrections.Calculate_Bead_Drift(_folders, self.fovs, _fov_id, 
-                                            num_threads=_num_threads, sequential_mode=_sequential_mode, 
-                                            single_im_size=self.shared_parameters['single_im_size'], 
-                                            all_channels=self.channels,
-                                            num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
-                                            num_empty_frames=self.shared_parameters['num_empty_frames'], 
-                                            num_skipped_channels=self.shared_parameters['num_skipped_channels'],
-                                            seed_by_per=seed_by_per,
-                                            gfilt_size=gfilt_size,
-                                            background_gfilt_size=background_gfilt_size,
-                                            filt_size=filt_size,
-                                            illumination_corr=self.shared_parameters['corr_illumination'],
-                                            correction_folder=self.correction_folder,
-                                            ref_id=_drift_ref, drift_size=_drift_size, save_folder=self.drift_folder,
-                                            save_postfix=_drift_postfix, 
-                                            coord_sel=_coord_sel, stringent=_stringent,
-                                            ref_seed_per=th_seed_per,
-                                            overwrite=_force_drift, verbose=_verbose, logger=self.logger,
-                                            spots_save_fileid=spots_save_fileid, plt_val=plt_val, plt_save=plt_save,
-                                            return_bottom_n_seeds=return_bottom_n_seeds)
 
             # create cells in parallel
             _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
@@ -1253,15 +1234,13 @@ class Cell_List():
                       'shared_parameters': self.shared_parameters,
                       'experiment_type': self.experiment_type, 
                       } for _cell_id in _cell_ids]
-            if not _direct_load_drift:
-                for _p in _params:
-                    _p['drift'] = _drift
+            for _p in _params:
+                _p['drift'] = None
             if self.experiment_type == 'RNA':
                 for _p in _params:
                     _p['rna-info_dic'] = getattr(self, 'rna-info_dic')
             _args += [(_p, True, _color_filename, _load_segmentation,
-                       _direct_load_drift, _drift_size, _drift_ref, 
-                       _drift_postfix, _dynamic, _load_exist_info, 
+                       _load_exist_info, 
                        _exclude_attrs, _save, 
                        False, _verbose, self.logger) for _p in _params]
             del(_fov_segmentation_label, _params, _cell_ids)
@@ -1269,7 +1248,7 @@ class Cell_List():
         ## do multi-processing to create cells!
         self.log_and_print(f"+ Creating {len(_args)} cells with {_num_threads} threads.", verbose=_verbose)
         _cell_pool = mp.Pool(_num_threads)
-        _cells = _cell_pool.starmap(self._create_cell, _args, chunksize=1)
+        _cells = _cell_pool.starmap(self._create_cell_nodrift, _args, chunksize=1)
         _cell_pool.close()
         _cell_pool.terminate()
         _cell_pool.join()
@@ -1281,11 +1260,6 @@ class Cell_List():
 
         ## If not directly load drift, do them here:
         for _cell in self.cells:
-            if not hasattr(_cell, 'drift'):
-                _cell._load_drift(_num_threads=self.num_threads, _size=_drift_size, _ref_id=_drift_ref, 
-                                  _drift_postfix=_drift_postfix,_load_annotated_only=_load_annotated_only,
-                                  _sequential_mode=_sequential_mode,
-                                  _force=_force_drift, _dynamic=_dynamic, _verbose=_verbose)
             if _save:
                 _cell._save_to_file('cell_info', _verbose=_verbose)
 
