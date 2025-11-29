@@ -1,6 +1,6 @@
 from warnings import WarningMessage
 import numpy as np
-from numpy.lib.npyio import save
+from numpy import save
 import cv2
 import os,sys,time
 import skimage 

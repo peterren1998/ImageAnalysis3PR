@@ -385,7 +385,7 @@ def load_image_from_fov_file(filename, data_type, region_ids,
         raise IOError(f"load file: {filename} doesn't exist!")
     if data_type not in _allowed_kwds:
         raise ValueError(f"Wrong input data_type:{data_type}, should be among {_allowed_kwds}.")
-    if isinstance(region_ids, int) or isinstance(region_ids, np.int):
+    if isinstance(region_ids, int) or isinstance(region_ids, np.int32):
         _region_ids = [int(region_ids)]
     elif isinstance(region_ids, list) or isinstance(region_ids, np.ndarray):
         _region_ids = [int(_id) for _id in region_ids]

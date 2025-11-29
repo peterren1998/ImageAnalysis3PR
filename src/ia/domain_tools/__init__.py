@@ -48,8 +48,8 @@ def interpolate_chr(_chr, gaussian=0):
 
 def extract_sequences(zxy, domain_starts):
     """Function to extract sequences of zxy coordinates given domain start indices"""
-    _dm_starts = np.array(domain_starts, dtype=np.int)
-    _dm_ends = np.array(list(domain_starts[1:])+[len(zxy)], dtype=np.int)
+    _dm_starts = np.array(domain_starts, dtype=np.int32)
+    _dm_ends = np.array(list(domain_starts[1:])+[len(zxy)], dtype=np.int32)
     _zxy = np.array(zxy)
     _seqs = []
     for _start, _end in zip(_dm_starts, _dm_ends):

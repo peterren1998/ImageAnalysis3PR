@@ -125,10 +125,10 @@ def _local_distance(spot_zxys, spot_ids, sel_zxys, sel_ids,
                     local_size=5, invalid_dist=np.nan):
     """Function to caluclate local distance"""
     _spot_zxys = np.array(spot_zxys)
-    _spot_ids = np.array(spot_ids, dtype=np.int)
+    _spot_ids = np.array(spot_ids, dtype=np.int32)
     
     _sel_zxys = np.array(sel_zxys)
-    _sel_ids = np.array(sel_ids, dtype=np.int)
+    _sel_ids = np.array(sel_ids, dtype=np.int32)
     
     _half_size = int((local_size-1)/2)
     # generate inds based on pt_ids
@@ -160,9 +160,9 @@ def _neighboring_distance(spot_zxys, spot_ids=None,
     """Function to calculate neighboring distances between list of spot_zxys"""
     _zxys = np.array(spot_zxys)
     if spot_ids is None:
-        _ids = np.arange(len(_zxys)).astype(np.int)
+        _ids = np.arange(len(_zxys)).astype(np.int32)
     else:
-        _ids = np.array(spot_ids, dtype=np.int)
+        _ids = np.array(spot_ids, dtype=np.int32)
     
     _nb_dists = []
     for _i, (_zxy, _id) in enumerate(zip(_zxys, _ids)):
@@ -183,9 +183,9 @@ def neighboring_distances(spot_zxys, spot_ids=None,
     """Function to calculate neighboring distances between list of spot_zxys"""
     _zxys = np.array(spot_zxys)
     if spot_ids is None:
-        _ids = np.arange(len(_zxys)).astype(np.int)
+        _ids = np.arange(len(_zxys)).astype(np.int32)
     else:
-        _ids = np.array(spot_ids, dtype=np.int)
+        _ids = np.array(spot_ids, dtype=np.int32)
     
     _fwd_nb_dists, _rev_nb_dists = [], []
     for _i, (_zxy, _id) in enumerate(zip(_zxys, _ids)):
@@ -233,11 +233,11 @@ def generate_ref_from_chromosome(sel_spots, sel_ids=None, distance_zxy=_distance
     _spots = np.array(sel_spots)
     # sel_ids
     if sel_ids is None:
-        _ids = np.arange(len(_spots)).astype(np.int)
+        _ids = np.arange(len(_spots)).astype(np.int32)
     else:
         if len(sel_ids) != len(sel_spots):
             raise IndexError(f"Wrong input ")
-        _ids = np.array(sel_ids, dtype=np.int)
+        _ids = np.array(sel_ids, dtype=np.int32)
     #print(f"** shape of ref spots{_spots.shape}, {distance_zxy.shape}")
     # zxys
     _zxys = _spots[:,1:4] * distance_zxy[np.newaxis,:]
@@ -346,9 +346,9 @@ def spot_score_in_chromosome(spots, spot_ids, sel_spots,
     _zxys = _spots[:,1:4] * distance_zxy[np.newaxis, :]
     # ids 
     if isinstance(spot_ids, list) or isinstance(spot_ids, np.ndarray):
-        _ids = np.array(spot_ids, dtype=np.int)
+        _ids = np.array(spot_ids, dtype=np.int32)
     elif isinstance(spot_ids, int) or isinstance(spot_ids, float) or isinstance(spot_ids, np.int32):
-        _ids = np.ones(len(_zxys),dtype=np.int) * spot_ids
+        _ids = np.ones(len(_zxys),dtype=np.int32) * spot_ids
     else:
         raise TypeError(f"Wrong input type for spot_ids, should be either np.ndarray/list or int/np.int32")
     if len(_spots) != len(_ids):
@@ -360,7 +360,7 @@ def spot_score_in_chromosome(spots, spot_ids, sel_spots,
     else:
         if len(_sel_spots) != len(sel_ids):
             raise IndexError(f"Wrong input length of _sel_spots and sel_ids, length should match!")
-        _sel_ids = np.array(sel_ids, dtype=np.int)
+        _sel_ids = np.array(sel_ids, dtype=np.int32)
     _sel_zxys = _sel_spots[:,1:4] * distance_zxy[np.newaxis, :]
     # chr_center
     if chr_center is None:
@@ -443,9 +443,9 @@ def chromosomal_spot_scores(spots, region_ids,
         raise IndexError(f"Wrong shape of _spots, should be 2d array!")
     # region ids 
     if isinstance(region_ids, list) or isinstance(region_ids, np.ndarray):
-        _region_ids = np.array(region_ids, dtype=np.int)
+        _region_ids = np.array(region_ids, dtype=np.int32)
     elif isinstance(region_ids, int) or isinstance(region_ids, float) or isinstance(region_ids, np.int32):
-        _region_ids = np.ones(len(_spots),dtype=np.int) * int(region_ids)
+        _region_ids = np.ones(len(_spots),dtype=np.int32) * int(region_ids)
     else:
         raise TypeError(f"Wrong input type for region_ids, should be either np.ndarray/list or int/np.int32")
     # sel_spots

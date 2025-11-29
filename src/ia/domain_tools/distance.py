@@ -178,7 +178,7 @@ def domain_pdists(coordinates, domain_starts, metric='median',
         raise ValueError(
             f"Input coordinates should be distance-matrix or 3d-coordinates!")
 
-    domain_starts = np.array(domain_starts, dtype=np.int)
+    domain_starts = np.array(domain_starts, dtype=np.int32)
     domain_ends = np.zeros(np.shape(domain_starts))
     domain_ends[:-1] = domain_starts[1:]
     domain_ends[-1] = len(coordinates)
@@ -219,7 +219,7 @@ def domain_correlation_pdists(coordinates, domain_starts):
         raise IndexError(f"Wrong dimension of _coordinates:{_coordinates.shape}, should be zxy or distmap")
 
     # get domain starts and ends
-    _starts = np.array(domain_starts, dtype=np.int)
+    _starts = np.array(domain_starts, dtype=np.int32)
     if 0 not in _starts:
         _starts = np.concatenate([np.array([0]), _starts])
     _ends = np.concatenate([_starts[1:],np.array([len(_coordinates)])])
@@ -252,7 +252,7 @@ def domain_neighboring_dists(coordinates, domain_starts, metric='median',
         raise ValueError(
             f"Input coordinates should be distance-matrix or 3d-coordinates!")
 
-    domain_starts = np.array(domain_starts, dtype=np.int)
+    domain_starts = np.array(domain_starts, dtype=np.int32)
     domain_ends = np.zeros(np.shape(domain_starts))
     domain_ends[:-1] = domain_starts[1:]
     domain_ends[-1] = len(coordinates)
@@ -405,7 +405,7 @@ def domain_neighboring_stats(coordinates, domain_starts, method='ks',
         raise ValueError(
             f"Input coordinates should be distance-matrix or 3d-coordinates!")
 
-    domain_starts = np.array(domain_starts, dtype=np.int)
+    domain_starts = np.array(domain_starts, dtype=np.int32)
     domain_ends = np.zeros(np.shape(domain_starts))
     domain_ends[:-1] = domain_starts[1:]
     domain_ends[-1] = len(coordinates)
@@ -448,7 +448,7 @@ def _neighboring_distance(zxys, spot_ids=None, radius=5):
     if spot_ids is None:
         spot_ids = np.arange(len(zxys))
     else:
-        spot_ids = np.array(spot_ids, dtype=np.int)
+        spot_ids = np.array(spot_ids, dtype=np.int32)
     # radius
     _radius = int(radius)
     # init local dists
@@ -470,7 +470,7 @@ def _domain_contact_freq(_coordinates, _domain_starts, _contact_th=400):
     if _coordinates.shape[0] != _coordinates.shape[1]:
         _coordinates = squareform(pdist(_coordinates))
     # _domain_starts
-    _domain_starts = np.sort(_domain_starts).astype(np.int)
+    _domain_starts = np.sort(_domain_starts).astype(np.int32)
     if 0 not in _domain_starts:
         _domain_starts = np.concatenate([np.array([0]), _domain_starts])
     if len(_coordinates) in _domain_starts:

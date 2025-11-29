@@ -33,8 +33,8 @@ def randomize_index_dict(index_dict, key1='A', key2='B'):
         raise KeyError(f"key2:{key2} not in index_dict")
     ## shuffling dict
     # retrieve data
-    _i1 = np.array(index_dict[key1], dtype=np.int)
-    _i2 = np.array(index_dict[key2], dtype=np.int)
+    _i1 = np.array(index_dict[key1], dtype=np.int32)
+    _i2 = np.array(index_dict[key2], dtype=np.int32)
     _total_is = np.concatenate([_i1,_i2])
     # shuffle
     np.random.shuffle(_total_is)
@@ -69,8 +69,8 @@ def max_project_AB_compartment(spots, comp_dict, pca_other_2d=True):
         raise TypeError(f"Wrong input type of comp_dict, should be dict but {type(comp_dict)} is given")
     
     # extract indices for first two keys in comp_dict
-    _ind1 = np.array(list(comp_dict.values())[0], dtype=np.int)
-    _ind2 = np.array(list(comp_dict.values())[1], dtype=np.int)
+    _ind1 = np.array(list(comp_dict.values())[0], dtype=np.int32)
+    _ind2 = np.array(list(comp_dict.values())[1], dtype=np.int32)
     # get original coordinates
     _coords = _spots[:,1:4]
     # get first axis
@@ -95,7 +95,7 @@ def max_project_AB_compartment(spots, comp_dict, pca_other_2d=True):
     _trans_coords = _coords @ _r
     # if PCA the other two axis, do the following:
     if pca_other_2d:
-        _clean_inds = np.array([_i for _i,_c in enumerate(_trans_coords) if not np.isnan(_c).any()],dtype=np.int)
+        _clean_inds = np.array([_i for _i,_c in enumerate(_trans_coords) if not np.isnan(_c).any()],dtype=np.int32)
         _clean_2d_coords = _trans_coords[_clean_inds][:,1:3]
         if 'PCA' not in locals():
             from sklearn.decomposition import PCA
@@ -146,7 +146,7 @@ def convert_spots_to_cloud(spots, comp_dict, im_radius=30,
     _density_dict = {_k:np.zeros([im_radius*2]*3) for _k in comp_dict.keys()}
     _spot_ct = {_k:0 for _k in comp_dict.keys()}
     for _k, _v in comp_dict.items():
-        for _spot in _norm_spots[np.array(_v, dtype=np.int)]:
+        for _spot in _norm_spots[np.array(_v, dtype=np.int32)]:
             if spot_variance is not None:
                 _var = np.array(spot_variance[:3]).reshape(-1)
             else:
@@ -255,7 +255,7 @@ def spot_cloud_scores(spots, ref_spots, comp_dict,
     _score_dict = {}
     for _key, _inds in comp_dict.items():
         # extract indices
-        _inds = np.array(_inds, dtype=np.int)
+        _inds = np.array(_inds, dtype=np.int32)
         # extract coordinates
         _ref_cts = _ref_spots[_inds,1:4]
         _scores = np.zeros(len(_zxys), dtype=np.float32)
@@ -370,7 +370,7 @@ def spot_density_scores(hzxys, ref_hzxys, comp_dict, stds=[100,100,100],
     _score_dict = {_k:np.zeros(len(_hzxys)) for _k in comp_dict}
     # loop through keys
     for _k, _inds in comp_dict.items():
-        _sel_ref_hzxys = _ref_hzxys[np.array(_inds, dtype=np.int)]
+        _sel_ref_hzxys = _ref_hzxys[np.array(_inds, dtype=np.int32)]
         # add gaussians
         for _i, _hzxy in enumerate(_hzxys):
             # skip if this spot is nan

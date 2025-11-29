@@ -132,7 +132,7 @@ def fit_matched_centers(im, ref_centers, match_distance_th=3,
         _matched_seed_inds = []
         for _ri in _matched_ref_inds:
             _matched_seed_inds.append(_seed_inds[np.where(_ref_inds==_ri)[0][0]])
-        _matched_seed_inds = np.array(_matched_seed_inds, dtype=np.int)
+        _matched_seed_inds = np.array(_matched_seed_inds, dtype=np.int32)
         # get matched ref_centers
         _matched_ref_cts = ref_centers[_matched_ref_inds]
         # get matched seeds and do fitting
@@ -214,8 +214,8 @@ def find_paired_centers(tar_cts, ref_cts, drift=None,
         _return_args.append(_paired_tar_cts)
         _return_args.append(_paired_ref_cts)
     if return_kept_inds:
-        _paired_tar_inds = np.array(_unique_pair_inds, dtype=np.int)[:,0]
-        _paired_ref_inds = np.array(_unique_pair_inds, dtype=np.int)[:,1]
+        _paired_tar_inds = np.array(_unique_pair_inds, dtype=np.int32)[:,0]
+        _paired_ref_inds = np.array(_unique_pair_inds, dtype=np.int32)[:,1]
         # append
         _return_args.append(_paired_tar_inds)
         _return_args.append(_paired_ref_inds)
@@ -255,7 +255,7 @@ def check_paired_centers(paired_tar_cts, paired_ref_cts,
     for _i, (_s, _tc, _rc) in enumerate(zip(_shifts, _tar_cts, _ref_cts)):
         # get neighboring center ids
         _nb_ids = np.array([_simplex for _simplex in _tri.simplices.copy()
-                            if _i in _simplex], dtype=np.int)
+                            if _i in _simplex], dtype=np.int32)
         _nb_ids = np.unique(_nb_ids)
         # remove itself
         _nb_ids = _nb_ids[(_nb_ids != _i) & (_nb_ids != -1)]

@@ -303,6 +303,8 @@ class Cell_List():
             self.shared_parameters['allowed_data_types'] = _allowed_kwds
         if 'num_skipped_channels' not in self.shared_parameters:
             self.shared_parameters['num_skipped_channels'] = 0
+        if 'rna_single_im_size' not in self.shared_parameters:
+            self.shared_parameters['rna_single_im_size'] = self.shared_parameters['single_im_size']
 
         ## chosen field of views
         if len(_chosen_fovs) == 0: # no specification
@@ -714,7 +716,7 @@ class Cell_List():
                                     change_seg_orientation_to_dapi=False,
                                     _save=True, _save_postfix='_segmentation',
                                     replace_save_prefix_str=None, rna_channels=None,
-                                    _save_npy=True, _return_all=False, _force=False, _verbose=True):
+                                    _save_npy=True, _return_all=False, _force=False, skip_correction=False, _verbose=True):
         """Function to translate segmenation from a previous experiment 
         given old_segmentation_folder and rotation matrix
         replace_save_prefix_str (str): if not None, look for associated dapi dax file by replacing the provided prefix string with "Conv_zscan_" 
@@ -784,6 +786,8 @@ class Cell_List():
             if fovid_mapping_dict is not None:
                 _new_fl = update_fovid_in_filename(_new_fl, fovid_mapping_dict, replace_save_prefix_str, _file_postfix)
                 _new_dapi_im_name = update_fovid_in_filename(_old_dapi_im_name, fovid_mapping_dict, 'Conv_zscan_', '.dax')
+            else:
+                _new_dapi_im_name = _old_dapi_im_name
             if rna_channels is None:
                 rna_channels = self.channels
             # translate new segmentation if it doesn't exists or force to generate new ones
@@ -801,7 +805,7 @@ class Cell_List():
                         self.shared_parameters['single_im_size'],
                         _old_correction_folder, _new_correction_folder,
                         _fft_gb, _fft_max_disp, illumination_corr, new_dapi_clip,
-                        change_seg_orientation_to_dapi, _return_all, _verbose)
+                        change_seg_orientation_to_dapi, _return_all, skip_correction, _verbose)
                 _seg_args.append(_arg)
                 _seg_fls.append(_new_fl)
             else:
@@ -810,15 +814,24 @@ class Cell_List():
                 if _save_npy:
                     _new_label = np.load(_new_fl)
                     if _return_all:
-                        _dapi_im = corrections.correct_single_image(os.path.join(
-                            _dapi_fd, _new_dapi_im_name), self.channels[self.dapi_channel_index],
-                            correction_folder=self.correction_folder,
-                            single_im_size=self.shared_parameters['single_im_size'], 
-                            all_channels=self.channels,
-                            num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
-                            num_empty_frames=self.shared_parameters['num_empty_frames'], 
-                            illumination_corr=illumination_corr
+                        if skip_correction:
+                            _dapi_im = visual_tools.crop_single_image(os.path.join(
+                                _dapi_fd, _new_dapi_im_name), self.channels[self.dapi_channel_index],
+                                single_im_size=self.shared_parameters['single_im_size'],
+                                all_channels=self.channels,
+                                num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
+                                num_empty_frames=self.shared_parameters['num_empty_frames']
                             )
+                        else:
+                            _dapi_im = corrections.correct_single_image(os.path.join(
+                                _dapi_fd, _new_dapi_im_name), self.channels[self.dapi_channel_index],
+                                correction_folder=self.correction_folder,
+                                single_im_size=self.shared_parameters['single_im_size'], 
+                                all_channels=self.channels,
+                                num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
+                                num_empty_frames=self.shared_parameters['num_empty_frames'], 
+                                illumination_corr=illumination_corr
+                                )
                 else:
                     _new_label, _dapi_im = pickle.load(open(_new_fl, 'rb'))
                 _new_labels.append(_new_label)
@@ -899,7 +912,199 @@ class Cell_List():
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
                           _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
                           spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
-        """Create Cele_data objects for one field of view"""
+        """Create Cell_data objects for one field of view"""
+        settings_msg = f'''
+        + Creating Cell_Data objects for fov_ids: {_fov_ids}
+        -- num_threads: {_num_threads}
+        -- sequential_mode: {_sequential_mode}
+        -- plot_segmentation: {_plot_segmentation}
+        -- load_segmentation: {_load_segmentation}
+        -- load_exist_info: {_load_exist_info}
+        -- exclude_attrs: {_exclude_attrs}
+        -- color_filename: {_color_filename}
+        -- load_annotated_only: {_load_annotated_only}
+        -- seed_by_per: {seed_by_per}
+        -- th_seed_per: {th_seed_per}
+        -- gfilt_size: {gfilt_size}
+        -- background_gfilt_size: {background_gfilt_size}
+        -- filt_size: {filt_size}
+        -- drift_size: {_drift_size}
+        -- drift_ref: {_drift_ref}
+        -- drift_postfix: {_drift_postfix}
+        -- coord_sel: {_coord_sel}
+        -- dynamic: {_dynamic}
+        -- save: {_save}
+        -- save_postfix: {_save_postfix}
+        -- force_drift: {_force_drift}
+        -- stringent: {_stringent}
+        -- verbose: {_verbose}
+        -- spots_save_fileid: {spots_save_fileid}
+        -- plt_val: {plt_val}
+        -- plt_save: {plt_save}
+        -- return_bottom_n_seeds: {return_bottom_n_seeds}
+        '''
+        if spots_save_fileid is not None:
+            # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
+            spots_save_fileid = os.path.join(self.drift_folder, os.path.splitext(os.path.basename(spots_save_fileid))[0])
+            if not os.path.exists(self.drift_folder):
+                os.makedirs(self.drift_folder)
+            self.log_and_print(f'++ saving spot information as {spots_save_fileid}', verbose=_verbose)
+        self.log(settings_msg)
+        if not _num_threads:
+            _num_threads = int(self.num_threads)
+        if isinstance(_fov_ids, int):
+            _fov_ids = [_fov_ids]
+        for _fov_id in _fov_ids:
+            if _fov_id not in self.fov_ids:
+                raise ValueError("Wrong fov_id kwd given! \
+                    this should be real fov-number that allowed during intiation of class.")
+        self.log_and_print("++ preparing variables", verbose=_verbose)
+        self.log_and_print(f"+ Create Cell_Data objects for field of view: {_fov_ids}", verbose=_verbose)
+        # whether load annotated hybs only
+        if _load_annotated_only:
+            _folders = self.annotated_folders
+        else:
+            _folders = self.folders
+        # check attributes
+        if not hasattr(self, 'channels') or not hasattr(self, 'color_dic'):
+            self._load_color_info(_color_filename=_color_filename)
+        # find the folder name for dapi
+        _select_dapi = False  # not select dapi fd yet
+        for _fd, _info in self.color_dic.items():
+            if len(_info) >= self.dapi_channel_index+1 and _info[self.dapi_channel_index] == 'DAPI':
+                _dapi_fd = [_full_fd for _full_fd in _folders if os.path.basename(_full_fd) == _fd]
+                if len(_dapi_fd) == 1:
+                    self.log_and_print(f"++ choose dapi images from folder: {_dapi_fd[0]}.", verbose=_verbose)
+                    _dapi_fd = _dapi_fd[0]
+                    _select_dapi = True  # successfully selected dapi
+        if not _select_dapi:
+            raise ValueError("No DAPI folder detected in annotated_folders, stop!")
+        ## load segmentation for this fov
+        _args = []
+        for _fov_id in _fov_ids:
+            self.log_and_print("+ Load segmentation for fov", _fov_id, verbose=_verbose)
+            self.log_and_print('+ Loading segmentation from : ', os.path.join(_dapi_fd, self.fovs[_fov_id]), verbose=_verbose)
+            # do segmentation if necessary, or just load existing segmentation file
+            _fov_segmentation_labels = visual_tools.DAPI_convoluted_segmentation(
+                os.path.join(_dapi_fd, self.fovs[_fov_id]), self.channels[self.dapi_channel_index],
+                single_im_size=self.shared_parameters['single_im_size'], 
+                all_channels=self.channels,
+                num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
+                num_empty_frames=self.shared_parameters['num_empty_frames'], 
+                illumination_correction=self.shared_parameters['corr_illumination'],
+                correction_folder=self.correction_folder, 
+                num_threads=_num_threads, make_plot=_plot_segmentation, return_images=False,
+                save=_save, save_npy=True, save_folder=self.segmentation_folder, 
+                save_postfix=_save_postfix, force=False,verbose=_verbose, logger=self.logger)
+            # extract result segmentation and image
+            _fov_segmentation_label = _fov_segmentation_labels[0]
+            # make plot if necesary
+            if _plot_segmentation:
+                plt.figure()
+                plt.imshow(_fov_segmentation_label)
+                plt.colorbar()
+                plt.title(f"Segmentation result for fov:{self.fovs[_fov_id]}")
+                plt.show()
+            # check whether can directly load drift
+            _direct_load_drift = False
+            _drift_filename = os.path.join(self.drift_folder, self.fovs[_fov_id].replace('.dax', _drift_postfix))
+            if os.path.isfile(_drift_filename):
+                _drift = pickle.load(open(_drift_filename, 'rb'))
+                _exist = [os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) for _fd in _folders \
+                        if os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) in _drift]
+                if len(_exist) == len(self.annotated_folders):
+                    _direct_load_drift = True
+            if not _direct_load_drift:
+                self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}", verbose=_verbose)
+                _drift, _failed_count = corrections.Calculate_Bead_Drift(_folders, self.fovs, _fov_id, 
+                                            num_threads=_num_threads, sequential_mode=_sequential_mode, 
+                                            single_im_size=self.shared_parameters['single_im_size'], 
+                                            all_channels=self.channels,
+                                            num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
+                                            num_empty_frames=self.shared_parameters['num_empty_frames'], 
+                                            num_skipped_channels=self.shared_parameters['num_skipped_channels'],
+                                            seed_by_per=seed_by_per,
+                                            gfilt_size=gfilt_size,
+                                            background_gfilt_size=background_gfilt_size,
+                                            filt_size=filt_size,
+                                            illumination_corr=self.shared_parameters['corr_illumination'],
+                                            correction_folder=self.correction_folder,
+                                            ref_id=_drift_ref, drift_size=_drift_size, save_folder=self.drift_folder,
+                                            save_postfix=_drift_postfix, 
+                                            coord_sel=_coord_sel, stringent=_stringent,
+                                            ref_seed_per=th_seed_per,
+                                            overwrite=_force_drift, verbose=_verbose, logger=self.logger,
+                                            spots_save_fileid=spots_save_fileid, plt_val=plt_val, plt_save=plt_save,
+                                            return_bottom_n_seeds=return_bottom_n_seeds)
+
+            # create cells in parallel
+            _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
+            self.log_and_print(f"+ Create cell_data objects, num_of_cell:{len(_cell_ids)}", verbose=_verbose)
+            _params = [{'fov_id': _fov_id,
+                      'cell_id': _cell_id,
+                      'folders': self.folders,
+                      'fovs': self.fovs,
+                      'data_folder': self.data_folder,
+                      'color_dic': self.color_dic,
+                      'use_dapi': self.use_dapi,
+                      'channels': self.channels,
+                      'bead_channel_index': self.bead_channel_index,
+                      'dapi_channel_index': self.dapi_channel_index,
+                      'annotated_folders': self.annotated_folders,
+                      'experiment_folder': self.experiment_folder,
+                      'analysis_folder':self.analysis_folder,
+                      'save_folder': self.save_folder,
+                      'segmentation_folder': self.segmentation_folder,
+                      'correction_folder': self.correction_folder,
+                      'drift_folder': self.drift_folder,
+                      'map_folder': self.map_folder,
+                      'shared_parameters': self.shared_parameters,
+                      'experiment_type': self.experiment_type, 
+                      } for _cell_id in _cell_ids]
+            if not _direct_load_drift:
+                for _p in _params:
+                    _p['drift'] = _drift
+            if self.experiment_type == 'RNA':
+                for _p in _params:
+                    _p['rna-info_dic'] = getattr(self, 'rna-info_dic')
+            _args += [(_p, True, _color_filename, _load_segmentation,
+                       _direct_load_drift, _drift_size, _drift_ref, 
+                       _drift_postfix, _dynamic, _load_exist_info, 
+                       _exclude_attrs, _save, 
+                       False, _verbose, self.logger) for _p in _params]
+            del(_fov_segmentation_label, _params, _cell_ids)
+
+        ## do multi-processing to create cells!
+        self.log_and_print(f"+ Creating {len(_args)} cells with {_num_threads} threads.", verbose=_verbose)
+        _cell_pool = mp.Pool(_num_threads)
+        _cells = _cell_pool.starmap(self._create_cell, _args, chunksize=1)
+        _cell_pool.close()
+        _cell_pool.terminate()
+        _cell_pool.join()
+        # clear
+        batch_functions.killchild()
+        del(_args, _cell_pool)
+        # load
+        self.cells += _cells
+
+        ## If not directly load drift, do them here:
+        for _cell in self.cells:
+            if not hasattr(_cell, 'drift'):
+                _cell._load_drift(_num_threads=self.num_threads, _size=_drift_size, _ref_id=_drift_ref, 
+                                  _drift_postfix=_drift_postfix,_load_annotated_only=_load_annotated_only,
+                                  _sequential_mode=_sequential_mode,
+                                  _force=_force_drift, _dynamic=_dynamic, _verbose=_verbose)
+            if _save:
+                _cell._save_to_file('cell_info', _verbose=_verbose)
+
+    def _create_cells_fov_nodrift(self, _fov_ids, _num_threads=None, _sequential_mode=False, _plot_segmentation=True, 
+                          _load_segmentation=True, _load_exist_info=True, _exclude_attrs=[],
+                          _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
+                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
+                          _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
+                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
+                          spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
+        """Create Cell_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
         -- num_threads: {_num_threads}

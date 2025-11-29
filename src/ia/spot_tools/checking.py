@@ -56,7 +56,7 @@ def check_spot_scores(all_spot_list, sel_spots, region_ids=None, sel_indices=Non
     elif len(region_ids) != len(sel_spots):
         raise ValueError(f"Wrong input length for region_ids, not matched with sel_spots")
     else:
-        region_ids = np.array(region_ids, dtype=np.int)
+        region_ids = np.array(region_ids, dtype=np.int32)
     
     if verbose:
         print(f"-- check spot for {len(sel_spots)} spots")
@@ -67,7 +67,7 @@ def check_spot_scores(all_spot_list, sel_spots, region_ids=None, sel_indices=Non
         if verbose:
             print(f"--- use all spots as reference,", end=' ')
         _ref_spots = all_spots
-        _ref_ids = np.concatenate([_id*np.ones(len(_spots), dtype=np.int) 
+        _ref_ids = np.concatenate([_id*np.ones(len(_spots), dtype=np.int32) 
                                    for _spots,_id in zip(all_spot_list, region_ids)])          
     else:
         if verbose:

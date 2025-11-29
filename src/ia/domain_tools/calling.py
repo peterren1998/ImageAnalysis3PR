@@ -62,14 +62,14 @@ def generate_candidate_domain_boundary(coordinates, dm_sz=5,
                 _kept_peaks.append( int((_matched_peak+_p)/2) )
             else:
                 _kept_peaks.append(_p)
-    return np.array(_kept_peaks, dtype=np.int)
+    return np.array(_kept_peaks, dtype=np.int32)
 
 
 def merge_domains(coordinates, cand_bd_starts, norm_mat=None, 
                   corr_th=0.05, dist_th=0.8, flexible_rate=0.2, 
                   domain_dist_metric='median', plot_steps=False, verbose=True):
     """Function to merge domains given zxy coordinates and candidate_boundaries"""
-    cand_bd_starts = np.array(cand_bd_starts, dtype=np.int)
+    cand_bd_starts = np.array(cand_bd_starts, dtype=np.int32)
     _merge_inds = np.array([-1])
     if verbose:
         print(
@@ -112,14 +112,14 @@ def merge_domains(coordinates, cand_bd_starts, norm_mat=None,
                 np.where((_nb_dists<=dist_th*(1-flexible_rate)) * (_nb_corrs<=corr_th*(1+flexible_rate)))[0]+1
             )
         # summarize merge_inds
-        _merge_inds = np.unique(np.concatenate(_merge_ind_list)).astype(np.int)
+        _merge_inds = np.unique(np.concatenate(_merge_ind_list)).astype(np.int32)
         # if there are any domain to be merged:
         if len(_merge_inds) > 0:
             # find the index with minimum distance bewteen neighboring domains
             # first merge neighbors with high corr and low dist
             _merge_dists = _nb_dists / dist_th + _nb_corrs / corr_th 
             # filter
-            _merge_dists = _merge_dists[np.array(_merge_inds, dtype=np.int)-1]
+            _merge_dists = _merge_dists[np.array(_merge_inds, dtype=np.int32)-1]
             _picked_ind = _merge_inds[np.argmin(_merge_dists)]
             if verbose:
                 print(f"---* merge domain:{_picked_ind} starting with region:{cand_bd_starts[_picked_ind]}, dist={np.diag(_dm_corr_mat, 1)[_picked_ind-1].round(4), np.diag(_dm_dist_mat, 1)[_picked_ind-1].round(4)}")
@@ -407,7 +407,7 @@ def iterative_domain_calling(spots, save_folder=None,
                     # save new boundaries
                     splitted_starts += list(_start+new_bds)
             # summarize new boundaries
-            splitted_starts = np.unique(splitted_starts).astype(np.int)
+            splitted_starts = np.unique(splitted_starts).astype(np.int32)
         # merge
         if _normalization:
             # no scaling for dist_th
@@ -641,10 +641,10 @@ def Domain_Calling_Sliding_Window(coordinates, window_size=5, distance_metric='m
 
     # only select peaks which showed up in more than reproduce_ratio*number_of_window cases
     _keep_flag = np.sum((np.isnan(_peak_coords) == False).astype(
-        np.int), axis=0) >= reproduce_ratio*len(peak_list)
+        np.int32), axis=0) >= reproduce_ratio*len(peak_list)
     # summarize selected peaks by mean of all summarized peaks
     sel_peaks = np.round(np.nanmean(_peak_coords, axis=0)
-                         ).astype(np.int)[_keep_flag]
+                         ).astype(np.int32)[_keep_flag]
     # concatenate a zero
     domain_starts = np.concatenate([np.array([0]), sel_peaks])
     # calculate strength
@@ -670,9 +670,9 @@ def Domain_Calling_Sliding_Window(coordinates, window_size=5, distance_metric='m
     if return_strength:
         kept_strengths = np.array([_s for _i, _s in enumerate(_strengths)
                                     if domain_starts[_i] in merged_starts or _s > merge_strength_th])
-        return kept_domains.astype(np.int), kept_strengths
+        return kept_domains.astype(np.int32), kept_strengths
     else:
-        return kept_domains.astype(np.int)
+        return kept_domains.astype(np.int32)
 
 
 def Batch_Domain_Calling_Sliding_Window(coordinate_list, window_size=5, distance_metric='median',
@@ -799,7 +799,7 @@ def insulation_domain_calling(distmap, min_domain_size=5, window_size=None,
         _peaks = find_peaks(_dists, **peak_kwargs)
     # extract peak locations and append a zero
     _domain_starts = np.concatenate([np.array([0]), _peaks[0]])
-    _domain_starts = np.array(_domain_starts, dtype=np.int)
+    _domain_starts = np.array(_domain_starts, dtype=np.int32)
     # make plot
     if make_plot:
         from ..figure_tools import _dpi, _double_col_width, _single_col_width
@@ -826,7 +826,7 @@ def merge_domain_by_contact_correlation(coordinates, domain_starts, contact_th=5
     if _coordinates.shape[0] != _coordinates.shape[1]:
         _coordinates = squareform(pdist(_coordinates))
     # _domain_starts
-    _domain_starts = np.sort(domain_starts).astype(np.int)
+    _domain_starts = np.sort(domain_starts).astype(np.int32)
     if 0 not in _domain_starts:
         _domain_starts = np.concatenate([np.array([0]), _domain_starts])
     if len(_coordinates) in _domain_starts:

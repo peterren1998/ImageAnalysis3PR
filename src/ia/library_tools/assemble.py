@@ -607,7 +607,7 @@ def Select_subset(input_probes, select_num=None, select_size=None,
         else:
             raise ValueError(f"Wrong input select_mode. ")
         # select probes
-        sel_pb_dic[_reg_id] = [_p for _i,_p in enumerate(_pbs) if _i in _sel_inds.astype(np.int)]
+        sel_pb_dic[_reg_id] = [_p for _i,_p in enumerate(_pbs) if _i in _sel_inds.astype(np.int32)]
         if verbose:
             print(f"--- {len(sel_pb_dic[_reg_id])} probes kept for region:{_reg_id}")
     

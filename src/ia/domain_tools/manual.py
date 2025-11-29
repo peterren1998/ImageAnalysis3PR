@@ -252,17 +252,17 @@ def fit_manual_boundaries(save_file, zxys, num_chroms=None, dom_sz=5, cutoff_max
                                                                valley=int((dom_sz+1)/2))
         # append a zero for first domain
         if 0 not in _loc_max:
-            _loc_max = np.concatenate([_loc_max, np.zeros(1,dtype=np.int)])
+            _loc_max = np.concatenate([_loc_max, np.zeros(1,dtype=np.int32)])
         # find nearest match 
         _ft_starts = [_loc_max[np.argmin(np.abs(_s-_loc_max))] for _s in _starts]
-        fitted_start_list.append(np.sort(_ft_starts).astype(np.int))
+        fitted_start_list.append(np.sort(_ft_starts).astype(np.int32))
         
     return fitted_start_list
 
 def find_matched_starts(starts, ref_starts, dom_sz=5, ignore_multi_match=True, ignore_zero=True):
     """Function to find matched domain starts"""
     # convert data_types
-    _ref_starts = np.array(ref_starts, dtype=np.int)
+    _ref_starts = np.array(ref_starts, dtype=np.int32)
     # initialize
     _matched_starts = []
     
@@ -278,4 +278,4 @@ def find_matched_starts(starts, ref_starts, dom_sz=5, ignore_multi_match=True, i
             else:
                 _matched_starts.append(_ref_starts[_match[0]])
     
-    return np.array(_matched_starts, dtype=np.int)
+    return np.array(_matched_starts, dtype=np.int32)

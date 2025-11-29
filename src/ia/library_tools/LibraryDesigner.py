@@ -101,7 +101,7 @@ class countTable():
         if self.sparse:
             self.matrix = self.matrix.tolil()
             if self.max_sparse_ind<=self.max_size:
-                pos_col = (pos/self.max_sparse_ind).astype(np.int)
+                pos_col = (pos/self.max_sparse_ind).astype(np.int32)
                 pos_row = pos-pos_col*self.max_sparse_ind
                 self.matrix[pos_col,pos_row] = countTable_values
             else:
@@ -237,7 +237,7 @@ class countTable():
         else:
             #read from RAM
             if self.sparse:
-                pos_col = (ints/self.max_sparse_ind).astype(np.int)
+                pos_col = (ints/self.max_sparse_ind).astype(np.int32)
                 pos_row = ints-pos_col*self.max_sparse_ind
                 results = np.sum(self.matrix[pos_col,pos_row])
             else:

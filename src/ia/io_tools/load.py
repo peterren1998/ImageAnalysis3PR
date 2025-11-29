@@ -118,9 +118,9 @@ def multi_crop_image_fov(filename, channels, crop_limit_list,
     _drift_crop_list = []
     for _crop in crop_limit_list:
         if len(_crop) == 2:
-            _n_crop = np.array([np.array([0, single_im_size[0]])]+list(_crop), dtype=np.int)
+            _n_crop = np.array([np.array([0, single_im_size[0]])]+list(_crop), dtype=np.int32)
         elif len(_crop) == 3:
-            _n_crop = np.array(_crop, dtype=np.int)
+            _n_crop = np.array(_crop, dtype=np.int32)
         else:
             raise ValueError(f"Wrong input _crop, should be 2d or 3d crop but {_crop} is given.")
         # append
@@ -138,7 +138,7 @@ def multi_crop_image_fov(filename, channels, crop_limit_list,
             else:
                 _cim = _im.copy()
             # revert to original crop size
-            _diffs = (_old_crop - _n_crop).astype(np.int)
+            _diffs = (_old_crop - _n_crop).astype(np.int32)
             _cims.append(_cim[_diffs[0, 0]: _diffs[0, 0]+_old_crop[0, 1]-_old_crop[0, 0],
                               _diffs[1, 0]: _diffs[1, 0]+_old_crop[1, 1]-_old_crop[1, 0],
                               _diffs[2, 0]: _diffs[2, 0]+_old_crop[2, 1]-_old_crop[2, 0]])
@@ -199,7 +199,7 @@ def correct_fov_image(dax_filename, sel_channels,
     else:
         sel_channels = [str(ch) for ch in sel_channels]
     # shared parameters
-    single_im_size = np.array(single_im_size, dtype=np.int)
+    single_im_size = np.array(single_im_size, dtype=np.int32)
     all_channels = [str(ch) for ch in all_channels]
     num_buffer_frames = int(num_buffer_frames)
     num_empty_frames = int(num_empty_frames)
@@ -518,6 +518,7 @@ def correct_fov_image(dax_filename, sel_channels,
     if return_drift:
         _return_args.extend([_drift, _drift_flag])
     
+    print(f'Returning {len(_return_args)} arguments...')    
     return tuple(_return_args)
 
 # split multi-channel images from DNA-FISH

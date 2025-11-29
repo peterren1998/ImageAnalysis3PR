@@ -281,7 +281,7 @@ def Bootstrap_spots_in_domain(chrom_zxy_list, spot_zxy_list, domain_indices,
         raise IndexError(f"Length of chrom_zxy_list:{len(chrom_zxy_list)} doesn't match length of spot_zxy_list:{len(spot_zxy_list)}")
     
     # convert domain indices into array with ints
-    domain_indices = np.array(domain_indices, dtype=np.int)
+    domain_indices = np.array(domain_indices, dtype=np.int32)
     if np.max(domain_indices) > len(chrom_zxy_list[0]):
         raise ValueError(f"Wrong input for domain_indices, no indices should be larger than zxy length")
     if verbose:
@@ -366,7 +366,7 @@ def region_genomic_scaling(coordinates, inds,
         raise ValueError(f"Wrong input of genomic_distance_matrix, it should be \
                          either 2d matrix having same size as coordinates, or path to file")
     # inds
-    inds = np.array(inds, dtype=np.int)
+    inds = np.array(inds, dtype=np.int32)
 
     # splice used indices
     _sel_mat = _mat[inds][:, inds]
@@ -435,7 +435,7 @@ def assign_domain_cluster_to_compartments(coordinates, domain_starts, compartmen
         raise ValueError(
             f"Input coordinates should be distance-matrix or 3d-coordinates!")
     # domain_starts
-    domain_starts = np.array(domain_starts, dtype=np.int)
+    domain_starts = np.array(domain_starts, dtype=np.int32)
     for _s in domain_starts:
         if _s < 0 or _s > _mat.shape[0]:
             raise ValueError(
@@ -507,9 +507,9 @@ def assign_domain_cluster_to_compartments(coordinates, domain_starts, compartmen
     # convert domain ID to region_id
     _reg_id_list = []
     for _n in _kept_clusters:
-        _dom_ids = np.array(_n.pre_order(lambda x: x.id), dtype=np.int)
+        _dom_ids = np.array(_n.pre_order(lambda x: x.id), dtype=np.int32)
         _reg_ids = [np.arange(domain_starts[_d], domain_ends[_d]).astype(
-            np.int) for _d in _dom_ids]
+            np.int32) for _d in _dom_ids]
         _reg_id_list.append(np.concatenate(_reg_ids))
 
     ## 2. with selected clusters, calculate its overlap with compartments
@@ -704,11 +704,11 @@ def local_maximum_in_density(den_dict, seeding_window=10, intensity_ratio=0.25):
     A_hessian = hessian(A_density)[:,:, A_z, A_x, A_y]
     A_eigs = [np.linalg.eigvals(A_hessian[:,:,_i]) for _i in range(len(A_x))]
     A_coords = np.array([[_z,_x,_y] for _z,_x,_y,_e,_int in zip(A_z,A_x,A_y,A_eigs,A_int) \
-                            if (_e<0).all() and _int > intensity_ratio*np.max(A_int)], dtype=np.int)
+                            if (_e<0).all() and _int > intensity_ratio*np.max(A_int)], dtype=np.int32)
     B_z,B_x,B_y = np.where(maximum_filter(B_density,seeding_window) == B_density)
     B_int = B_density[B_z,B_x,B_y]
     B_hessian = hessian(B_density)[:,:, B_z, B_x, B_y]
     B_eigs = [np.linalg.eigvals(B_hessian[:,:,_i]) for _i in range(len(B_x))]
     B_coords = np.array([[_z,_x,_y] for _z,_x,_y,_e,_int in zip(B_z,B_x,B_y,B_eigs,B_int) \
-                          if (_e<0).all() and _int > intensity_ratio*np.max(B_int)], dtype=np.int)
+                          if (_e<0).all() and _int > intensity_ratio*np.max(B_int)], dtype=np.int32)
     return A_coords, B_coords

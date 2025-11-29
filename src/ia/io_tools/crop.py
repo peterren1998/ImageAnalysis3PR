@@ -41,14 +41,14 @@ def decide_starting_frames(channels, num_channels=None, all_channels=_allowed_co
     
 def translate_crop_by_drift(crop3d, drift3d=np.array([0,0,0]), single_im_size=_image_size):
     
-    crop3d = np.array(crop3d, dtype=np.int)
+    crop3d = np.array(crop3d, dtype=np.int32)
     drift3d = np.array(drift3d)
-    single_im_size = np.array(single_im_size, dtype=np.int)
+    single_im_size = np.array(single_im_size, dtype=np.int32)
     # deal with negative upper limits    
     for _i, (_lims, _s) in enumerate(zip(crop3d, single_im_size)):
         if _lims[1] < 0:
             crop3d[_i,1] += _s
-    _drift_limits = np.zeros(crop3d.shape, dtype=np.int)
+    _drift_limits = np.zeros(crop3d.shape, dtype=np.int32)
     # generate drifted crops
     for _i, (_d, _lims) in enumerate(zip(drift3d, crop3d)):
         _drift_limits[_i, 0] = max(_lims[0]-np.ceil(np.abs(_d)), 0)

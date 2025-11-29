@@ -2797,7 +2797,8 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                            fft_gb=0, fft_max_disp=200,
                            illumination_corr=True, new_dapi_clip=(None, None),
                            change_seg_orientation_to_dapi=False,
-                           return_new_dapi=False, verbose=True):
+                           return_new_dapi=False, skip_correction=False,
+                           verbose=True):
     """Function to translate segmentation to another given both dapi_images 
     (rotation_matrix may be provided as well)
     Inputs:
@@ -2835,21 +2836,35 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         if verbose:
             print(f"-- loading old_dapi_im from file:{old_dapi_im}")
             print(f'rna_channels: {rna_channels}')
-        old_dapi_im = corrections.correct_single_image(old_dapi_im, dapi_channel, all_channels=rna_channels,
-                                               correction_folder=old_correction_folder,
-                                               num_skipped_channels=num_skipped_channels,
-                                               single_im_size=rna_single_im_size,
-                                               num_buffer_frames=num_buffer_frames, 
-                                               num_empty_frames=num_empty_frames,
-                                               illumination_corr=illumination_corr,
-                                               verbose=verbose) 
+        if skip_correction:
+            old_dapi_im = crop_single_image(old_dapi_im, dapi_channel, all_channels=rna_channels,
+                                            num_skipped_channels=num_skipped_channels,
+                                            single_im_size=rna_single_im_size,
+                                            num_buffer_frames=num_buffer_frames,
+                                            num_empty_frames=num_empty_frames)
+        else:
+            old_dapi_im = corrections.correct_single_image(old_dapi_im, dapi_channel, all_channels=rna_channels,
+                                                correction_folder=old_correction_folder,
+                                                num_skipped_channels=num_skipped_channels,
+                                                single_im_size=rna_single_im_size,
+                                                num_buffer_frames=num_buffer_frames, 
+                                                num_empty_frames=num_empty_frames,
+                                                illumination_corr=illumination_corr,
+                                                verbose=verbose) 
     # new_dapi_im
     if not isinstance(new_dapi_im, str) and not isinstance(new_dapi_im, np.ndarray) and not isinstance(new_dapi_im, np.memmap):
         raise TypeError(f"Wrong data type for new_dapi_im:{type(new_dapi_im)}, np.ndarray or np.memmap expected")
     elif isinstance(new_dapi_im, str):
         if verbose:
             print(f"-- loading new_dapi_im from file:{new_dapi_im}")
-        new_dapi_im = corrections.correct_single_image(new_dapi_im, dapi_channel,
+        if skip_correction:
+            new_dapi_im = crop_single_image(new_dapi_im, dapi_channel, all_channels=dna_channels,
+                                            num_skipped_channels=num_skipped_channels,
+                                            single_im_size=dna_single_im_size,
+                                            num_buffer_frames=num_buffer_frames,
+                                            num_empty_frames=num_empty_frames,
+                                            clip=new_dapi_clip)
+            new_dapi_im = corrections.correct_single_image(new_dapi_im, dapi_channel,
                                                all_channels=dna_channels,
                                                correction_folder=new_correction_folder,
                                                num_skipped_channels=num_skipped_channels,

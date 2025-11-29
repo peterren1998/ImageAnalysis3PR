@@ -55,7 +55,7 @@ def generate_chromatic_function(chromatic_const_file, drift=None):
         else:
             _info_dict ={
                 'constants': [np.array([0]) for _dft in drift],
-                'fitting_orders': np.zeros(len(drift),dtype=np.int),
+                'fitting_orders': np.zeros(len(drift),dtype=np.int32),
                 'ref_center': np.zeros(len(drift)),
             }
     else:
@@ -243,6 +243,8 @@ def Generate_chromatic_abbrevation(chromatic_folder, ref_folder,
         _ref_coords = np.array(_ref_coords)
         # adjust ref_coords with ref center
         if ref_center is None:
+            print(f'_correction_args["single_im_size"]: {_correction_args["single_im_size"]}')
+            print(f'np.shape(_ref_coords): {np.shape(_ref_coords)}')
             _ref_center = _correction_args['single_im_size'][:np.shape(_ref_coords)[1]] / 2
         else:
             _ref_center = np.array(ref_center)[:np.shape(_ref_coords)[1]]
@@ -358,7 +360,7 @@ def find_chromatic_spot_pairs(ca_filename:str,
                                        return_drift=False, 
                                        verbose=verbose)
         # load reference file and calculate drift
-        _ca_ims, _, _drift = correct_fov_image(ca_filename, 
+        _ca_ims, _, _drift, _ = correct_fov_image(ca_filename, 
                                                [ca_channel, drift_channel],
                                                **correction_args, 
                                                **drift_args, 

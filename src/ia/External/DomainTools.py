@@ -82,7 +82,7 @@ def get_ind_loc_max(dists,cutoff_max=1.,valley=3, remove_edge=True, make_plot=Fa
         plt.plot(np.arange(len(dists)), dists)
         plt.plot(_local_max_inds, np.array(dists)[_local_max_inds], 'ro')
         plt.show()
-    return np.array(_local_max_inds, dtype=np.int)
+    return np.array(_local_max_inds, dtype=np.int32)
 
 def get_boundaries_old(im,su=5,sl=5,valley=5,cutoff_max=1.,plt_val=False):
     """Bintu et al 2018 candidate boundary calling"""
@@ -165,7 +165,7 @@ def fuse_doms(mat,dom_starts,tag='median',cut_off=1, hard_cutoff=2,
               use_local=True, min_dom_sz=5):
     from ..domain_tools.distance import domain_neighboring_dists, domain_neighboring_stats
 
-    dom_starts = np.array(dom_starts, dtype=np.int)
+    dom_starts = np.array(dom_starts, dtype=np.int32)
     dom_ends = np.zeros(np.shape(dom_starts))
     dom_ends[:-1] = dom_starts[1:]
     dom_ends[-1] = len(mat)
@@ -464,7 +464,7 @@ def ArrowHead_Feature(_arrowmap, _make_plot=True, _verbose=True):
                 # crop feature triangles
                 _crop = np.copy(_arrowmap[_ulim:_j, _ulim:_rlim])
             for _c in range(2*_crop_dim):
-                _crop[np.ceil(_c/2).astype(np.int):,_c] = np.nan # remove lower-left triangle
+                _crop[np.ceil(_c/2).astype(np.int32):,_c] = np.nan # remove lower-left triangle
                 _crop[:_crop_dim+int((_c+1)/2), _c+_crop.shape[0]] = np.nan # remote upper-right triangle
             # get sign sum var for this (i,j) pair
             _sign = np.nansum(_crop[:, :_crop.shape[0]]>0) - np.nansum(_crop[:, :_crop.shape[0]]<0) \

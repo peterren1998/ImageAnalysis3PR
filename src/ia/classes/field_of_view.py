@@ -1331,7 +1331,7 @@ class Field_of_View():
                     # ids
                     if 'ids' not in _grp:
                         _ids = _grp.create_dataset('ids', (len(_dict['ids']),), dtype='i', data=_dict['ids'])
-                        _ids = np.array(_dict['ids'], dtype=np.int) # save ids
+                        _ids = np.array(_dict['ids'], dtype=np.int32) # save ids
                         _data_attrs.append('ids')
                     elif len(_dict['ids']) != len(_grp['ids']):
                         _change_size_flag.append('id')
@@ -1473,11 +1473,11 @@ class Field_of_View():
                                         self.shared_parameters['allowed_data_types'])
             _region_ids = _type_dic[_data_type]
         else:  
-            if isinstance(_region_ids, int) or isinstance(_region_ids, np.int):
+            if isinstance(_region_ids, int) or isinstance(_region_ids, np.int32):
                 _region_ids = [_region_ids]   
             elif not isinstance(_region_ids, list) and not isinstance(_region_ids, np.ndarray):
                 raise TypeError(f"Wrong input type for region_ids:{_region_ids}")
-            _region_ids = np.array([int(_i) for _i in _region_ids],dtype=np.int)
+            _region_ids = np.array([int(_i) for _i in _region_ids],dtype=np.int32)
         # print
         if _verbose:
             _check_time = time.time()
@@ -1867,15 +1867,15 @@ class Field_of_View():
                     _shift_time = time.time()
                 
                 if _fast:
-                    _rough_drifts = np.round(_drifts).astype(np.int)
+                    _rough_drifts = np.round(_drifts).astype(np.int32)
                     for _i, (_im, _flag, _drift) in enumerate(zip(_ims, _flags, _rough_drifts)):
                         # if warpped, directly add
                         if _flag == 2:
                             _chrom_im += _im
                         else:
                             # left limits
-                            _llim = np.max([_drift, np.zeros(len(_drift), dtype=np.int)], axis=0)
-                            _shift_llim = np.max([-_drift, np.zeros(len(_drift), dtype=np.int)], axis=0)
+                            _llim = np.max([_drift, np.zeros(len(_drift), dtype=np.int32)], axis=0)
+                            _shift_llim = np.max([-_drift, np.zeros(len(_drift), dtype=np.int32)], axis=0)
                             # corresponding right limits
                             _rlim = np.array(np.shape(_im)) - _shift_llim
                             _shift_rlim = _shift_llim + (_rlim - _llim)
@@ -2370,7 +2370,7 @@ class Field_of_View():
                 # choose dapi folder
                 if len(_dapi_fds) == 1 or (len(_dapi_fds) > 1 and _dapi_id is None): 
                     _dapi_fd = _dapi_fds[0]
-                elif isinstance(_dapi_id, int) or isinstance(_dapi_id, np.int):
+                elif isinstance(_dapi_id, int) or isinstance(_dapi_id, np.int32):
                     _dapi_fd = _dapi_fds[_dapi_id]
                 else:
                     raise TypeError(f"Wrong input type: {type(_dapi_id)} for _dapi_id.")
@@ -2446,7 +2446,7 @@ class Field_of_View():
         if 'correct_fov_image' not in locals():
             from ..io_tools.load import correct_fov_image
 
-        if isinstance(_bead_id, int) or isinstance(_bead_id, np.int):
+        if isinstance(_bead_id, int) or isinstance(_bead_id, np.int32):
             _ind = int(_bead_id)
         elif isinstance(_bead_id, str):
             for _i, _fd in enumerate(self.annotated_folders):

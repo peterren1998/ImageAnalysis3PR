@@ -57,10 +57,10 @@ def get_seeds(im, max_num_seeds=None, th_seed=150,
         if len(sel_center) != len(np.shape(im)):
             raise IndexError(f"num of dimensions should match for selected center and image given.")
         # get selected center and cropping neighbors
-        _center = np.array(sel_center, dtype=np.int)
+        _center = np.array(sel_center, dtype=np.int32)
         _llims = np.max([np.zeros(len(im.shape)), _center-seed_radius], axis=0)
         _rlims = np.min([np.array(im.shape), _center+seed_radius], axis=0)
-        _lims = np.array(np.transpose(np.stack([_llims, _rlims])), dtype=np.int)
+        _lims = np.array(np.transpose(np.stack([_llims, _rlims])), dtype=np.int32)
         _lim_crops = tuple([slice(_l,_r) for _l,_r in _lims])
         # crop image
         _im = im[_lim_crops]
@@ -147,7 +147,7 @@ def get_seeds(im, max_num_seeds=None, th_seed=150,
         print(f"found {len(_final_coords)} seeds in {time.time()-_start_time:.2f}s")
     # truncate with max_num_seeds
     if max_num_seeds is not None and max_num_seeds > 0 and max_num_seeds <= len(_final_coords):
-        _final_coords = _final_coords[:np.int(max_num_seeds)]
+        _final_coords = _final_coords[:np.int32(max_num_seeds)]
         if verbose:
             print(f"--- {max_num_seeds} seeds are kept.")
     

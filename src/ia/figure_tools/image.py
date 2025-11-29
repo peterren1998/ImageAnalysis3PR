@@ -68,7 +68,7 @@ def visualize_2d_projection(im, kept_axes=(1,2), ax=None,
     if crop is None:
         crop_slice = tuple([slice(0, _im.shape[0]), slice(0, _im.shape[1])])
     else:
-        crop = np.array(crop, dtype=np.int)
+        crop = np.array(crop, dtype=np.int32)
         if crop.shape[0] != 2 or crop.shape[1] != 2:
             raise ValueError(f"crop should be 2x2 array telling 2d crop of the image")
         crop_slice = tuple([slice(max(0, crop[0,0]), min(_im.shape[0], crop[0,1])),
@@ -145,7 +145,7 @@ def visualize_2d_gaussian(im, spot, color=[0,0,0], kept_axes=(1,2), ax=None, cro
     if crop is None:
         crop_slice = tuple([slice(0, _im.shape[0]), slice(0, _im.shape[1])])
     else:
-        crop = np.array(crop, dtype=np.int)
+        crop = np.array(crop, dtype=np.int32)
         if crop.shape[0] != 2 or crop.shape[1] != 2:
             raise ValueError(f"crop should be 2x2 array telling 2d crop of the image")
         crop_slice = tuple([slice(max(0, crop[0,0]), min(_im.shape[0], crop[0,1])),

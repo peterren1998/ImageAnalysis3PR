@@ -34,7 +34,7 @@ def plot_boundary_probability(region_ids, domain_start_list, figure_kwargs={}, p
     if 'plt' not in locals():
         import matplotlib.pyplot as plt
     # summarize
-    _x = np.array(region_ids, dtype=np.int)
+    _x = np.array(region_ids, dtype=np.int32)
     _y = np.zeros(np.shape(_x), dtype=np.float32)
     for _dm_starts in domain_start_list:
         for _d in _dm_starts:
@@ -124,11 +124,11 @@ def plot_domain_in_distmap(distmap, domain_starts, ax=None,
     _distmap = distmap.copy()
     _distmap[_distmap<min(color_limits)] = min(color_limits)
     # domain starts
-    domain_starts = np.array(domain_starts, dtype=np.int)
+    domain_starts = np.array(domain_starts, dtype=np.int32)
     if 0 not in domain_starts:
-        domain_starts = np.concatenate([np.array([0]), domain_starts]).astype(np.int)
+        domain_starts = np.concatenate([np.array([0]), domain_starts]).astype(np.int32)
     # domain ends
-    domain_ends = np.concatenate([domain_starts[1:], np.array([len(distmap)])]).astype(np.int)
+    domain_ends = np.concatenate([domain_starts[1:], np.array([len(distmap)])]).astype(np.int32)
 
     
     ## create image

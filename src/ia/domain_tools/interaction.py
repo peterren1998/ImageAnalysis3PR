@@ -25,7 +25,7 @@ def inter_domain_markers(coordiantes, domain_starts,
     """
     ## check inputs
     _coordinates = np.array(coordiantes)
-    _domain_starts = np.array(domain_starts, dtype=np.int)
+    _domain_starts = np.array(domain_starts, dtype=np.int32)
     if len(_coordinates.shape) != 2:
         raise IndexError(f"Wrong input shape for coordinates, it should be 2d-array but shape:{_coordinates.shape} is given.")
     
@@ -78,7 +78,7 @@ def _interdomain_likelihood(_distmap, _domain_starts, _inter_pairs,
     
     ## prepare inputs
     # first of all, extract domain starts
-    _dm_starts = np.array(_domain_starts, dtype=np.int)
+    _dm_starts = np.array(_domain_starts, dtype=np.int32)
     _dm_ends = np.concatenate([_dm_starts[1:], np.array([len(_distmap)])])
     # initialize a domain interaction likelihood map
     _dm_inter_lks = np.zeros([len(_dm_starts), len(_dm_starts)])
@@ -87,7 +87,7 @@ def _interdomain_likelihood(_distmap, _domain_starts, _inter_pairs,
     for _dm_id in range(len(_dm_starts)):
         # collect all interaction pairs related to this domain
         _called_partners = np.unique([np.array(_p)[np.where(np.array(_p)!=_dm_id)[0]] 
-                                      for _p in _inter_pairs if _dm_id in _p ]).astype(np.int)
+                                      for _p in _inter_pairs if _dm_id in _p ]).astype(np.int32)
         _intra = _distmap[_dm_starts[_dm_id]:_dm_ends[_dm_id], _dm_starts[_dm_id]:_dm_ends[_dm_id]]
         # if there are interactions, compare called and nocalled pairs and calculate likelihood ratios
         if len(_called_partners) >= 1 \
@@ -99,7 +99,7 @@ def _interdomain_likelihood(_distmap, _domain_starts, _inter_pairs,
                            for _i in range(len(_dm_starts)) if _i in _called_partners]
             _neg_inters = [_distmap[_dm_starts[_i]:_dm_ends[_i], _dm_starts[_dm_id]:_dm_ends[_dm_id]]
                            for _i in range(len(_dm_starts)) if _i not in _called_partners and _i != _dm_id]
-            _neg_ids = np.array([_i for _i in range(len(_dm_starts)) if _i not in _called_partners and _i != _dm_id], dtype=np.int)
+            _neg_ids = np.array([_i for _i in range(len(_dm_starts)) if _i not in _called_partners and _i != _dm_id], dtype=np.int32)
             
             _all_inters = np.concatenate(_inters)
             _all_pos_inters = np.concatenate(_pos_inters)
@@ -167,7 +167,7 @@ def _exclude_interdomain_by_contact(_coordinates, _domain_starts, _inter_pairs,
     elif np.shape(_coordinates)[0] != np.shape(_coordinates)[1]:
         _coordinates = squareform(pdist(_coordinates))
     # check domain starts
-    _domain_starts = np.array(_domain_starts, dtype=np.int)
+    _domain_starts = np.array(_domain_starts, dtype=np.int32)
     if 0 not in _domain_starts:
         _domain_starts = np.concatenate([np.array([0]), _domain_starts])
     # domain ends
@@ -183,7 +183,7 @@ def _exclude_interdomain_by_contact(_coordinates, _domain_starts, _inter_pairs,
         if _freq > _mean_contact_ratio:
             _kept_pairs.append(_pair)
     
-    return np.array(_kept_pairs, dtype=np.int)
+    return np.array(_kept_pairs, dtype=np.int32)
 
 
 def _adjust_interdomain_by_likelihood(_inter_pairs, _inter_dm_lk_mat, 
@@ -254,7 +254,7 @@ def _adjust_interdomain_by_likelihood(_inter_pairs, _inter_dm_lk_mat,
                 _pair_sets.append({_x, _y})
             
         _pair_sets = sorted(_pair_sets, key=lambda v:(min(v),max(v)))
-        _new_pairs = np.array([[min(_p),max(_p)] for _p in _pair_sets], dtype=np.int)
+        _new_pairs = np.array([[min(_p),max(_p)] for _p in _pair_sets], dtype=np.int32)
     else:
         _new_pairs = _inter_pairs.copy()
         _removed_num = 0
@@ -343,7 +343,7 @@ def iterative_interdomain_calling(distmap, domain_starts,
                 _new_pairs.append([_p[0], _p[1]])
             if [_p[1], _p[0]] not in _new_pairs:
                 _new_pairs.append([_p[1], _p[0]])
-        _new_pairs = np.array(_new_pairs, dtype=np.int)
+        _new_pairs = np.array(_new_pairs, dtype=np.int32)
     else:
         _new_pairs = _pairs.copy()
             
@@ -366,8 +366,8 @@ def _generate_inter_domain_markers(_coordinates, _domain_starts, _domain_pdists,
     # get domain features
     _dm_starts = np.array(_domain_starts)
     _dm_ends = np.concatenate([_dm_starts[1:], np.array([len(_coordinates)])])
-    _dm_centers = ((_dm_starts + _dm_ends)/2).astype(np.int)
-    _domain_xy = np.array(_domain_xy, dtype=np.int)
+    _dm_centers = ((_dm_starts + _dm_ends)/2).astype(np.int32)
+    _domain_xy = np.array(_domain_xy, dtype=np.int32)
     # initialize marker-map
     _marker_map = np.zeros([len(_coordinates), len(_coordinates)])
     if len(_domain_xy) == 0:
@@ -557,7 +557,7 @@ def _generate_loop_out_markers(_coordinates, _domain_starts, _loop_region_domain
     # get domain features
     _dm_starts = np.array(_domain_starts)
     _dm_ends = np.concatenate([_dm_starts[1:], np.array([len(_coordinates)])])
-    _dm_centers = ((_dm_starts + _dm_ends)/2).astype(np.int)
+    _dm_centers = ((_dm_starts + _dm_ends)/2).astype(np.int32)
     # initialize marker-map
     _marker_map = np.zeros([len(_coordinates), len(_coordinates)])
     if len(_loop_region_domain_pairs) == 0:
@@ -606,7 +606,7 @@ def loop_out_markers(coordinates, domain_starts, norm_mat=None, metric='median',
                      normalize=True, verbose=True):
     ## check inputs
     _coordinates = np.array(coordinates)
-    _domain_starts = np.array(domain_starts, dtype=np.int)
+    _domain_starts = np.array(domain_starts, dtype=np.int32)
     if verbose:
         _start_time = time.time()
         print(f"-- calculate loop-out for {len(_domain_starts)} domains in {len(_coordinates)} regions")
