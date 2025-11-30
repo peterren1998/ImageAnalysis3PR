@@ -2864,6 +2864,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                                             num_buffer_frames=num_buffer_frames,
                                             num_empty_frames=num_empty_frames,
                                             clip=new_dapi_clip)
+        else:
             new_dapi_im = corrections.correct_single_image(new_dapi_im, dapi_channel,
                                                all_channels=dna_channels,
                                                correction_folder=new_correction_folder,
