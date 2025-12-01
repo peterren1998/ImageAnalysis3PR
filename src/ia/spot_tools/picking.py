@@ -1363,7 +1363,7 @@ def EM_pick_spots_for_chromosomes(cell_cand_spots, region_ids,
                 new_spot_list, new_ind_list = [], []
                 for _i in range(_num_chroms):
                     sel_spots, new_inds = dynamic_pick_spots_for_chromosomes(cell_cand_spots,
-                                            region_ids, chrom_coords=[chrom_coords[_i]], sel_spot_list=[sel_spot_list[_i]],
+                                            region_ids, chrom_coords=[chrom_coords[_i]] if chrom_coords is not None else None, sel_spot_list=[sel_spot_list[_i]],
                                             ref_spot_list=None, ref_spot_ids=ref_spot_ids,
                                             ref_dist_metric=ref_dist_metric, nb_dist_list=None, spot_num_th=spot_num_th,
                                             intensity_th=intensity_th, hard_intensity_th=hard_intensity_th,

@@ -1211,7 +1211,7 @@ def DAPI_segmentation(ims, names,
         # denoise and merge
         if denoise_window:
             for _i,_l in enumerate(range(np.min(_stack_lims), np.max(_stack_lims))):
-                _stack_im[_i] = restoration.denoise_bilateral(_im[_l], win_size=int(denoise_window), mode='edge', multichannel=False)
+                _stack_im[_i] = restoration.denoise_bilateral(_im[_l], win_size=int(denoise_window), mode='edge')
         else:
             for _i,_l in enumerate(range(np.min(_stack_lims), np.max(_stack_lims))):
                 _stack_im[_i] = _im[_l]
@@ -1435,7 +1435,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         # denoise and merge
         if denoise_window:
             for _i,_l in enumerate(range(np.min(_stack_lims), np.max(_stack_lims))):
-                _stack_im[_i] = restoration.denoise_bilateral(_im[_l], win_size=int(denoise_window), mode='edge', multichannel=False)
+                _stack_im[_i] = restoration.denoise_bilateral(_im[_l], win_size=int(denoise_window), mode='edge')
         else:
             for _i,_l in enumerate(range(np.min(_stack_lims), np.max(_stack_lims))):
                 _stack_im[_i] = _im[_l]

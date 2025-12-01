@@ -1143,16 +1143,10 @@ class Cell_List():
         -- save: {_save}
         -- save_postfix: {_save_postfix}
         -- verbose: {_verbose}
-        -- spots_save_fileid: {spots_save_fileid}
         -- plt_val: {plt_val}
         -- plt_save: {plt_save}
         '''
-        if spots_save_fileid is not None:
-            # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
-            spots_save_fileid = os.path.join(self.drift_folder, os.path.splitext(os.path.basename(spots_save_fileid))[0])
-            if not os.path.exists(self.drift_folder):
-                os.makedirs(self.drift_folder)
-            self.log_and_print(f'++ saving spot information as {spots_save_fileid}', verbose=_verbose)
+
         self.log(settings_msg)
         if not _num_threads:
             _num_threads = int(self.num_threads)
@@ -1303,7 +1297,7 @@ class Cell_List():
                 _fov_cells = [_cell for _cell in self.cells if _cell.fov_id==_fov_id]
                 for _cell in _fov_cells:
                     # if not all unique exists for this cell:
-                    if not _cell._check_full_set(_data_type) or _force:
+                    if not _cell._check_full_set(_data_type, _verbose=_verbose) or _force:
                         if _verbose:
                             print(f"+ Crop unique images for fov:{_cell.fov_id}, cell:{_cell.cell_id}")
                         _cell._crop_images(_data_type, _num_threads=self.num_threads, 
@@ -3182,7 +3176,7 @@ class Cell_Data():
                                     self.channels,
                                     self.shared_parameters['num_buffer_frames'], 
                                     self.shared_parameters['num_empty_frames'],
-                                    self.drift[_ref_name],
+                                    self.drift[_ref_name] if self.drift is not None else np.array([0, 0, 0]),
                                     self.correction_folder, 
                                     self.shared_parameters['normalization'], 
                                     self.shared_parameters['corr_bleed'],
