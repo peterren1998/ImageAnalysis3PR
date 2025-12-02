@@ -1318,7 +1318,8 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         dialation_dim=4, random_walker_beta=0.1, remove_fov_boundary=50,
         num_skipped_channels=0,
         save=True, save_folder=None, force=False, 
-        save_npy=True, save_postfix="_segmentation",
+        save_npy=True, save_postfix="_segmentation", seg_prefix='segmentation_label_',
+        double_seg_size=False, return_max_proj_if_3D=True,
         make_plot=False, return_images=False, verbose=True, logger=None):
     """cell segmentation for DAPI images with pooling and convolution layers
     Inputs:
@@ -1362,7 +1363,13 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
     if not os.path.exists(save_folder): # create folder if not exists
         os.makedirs(save_folder)
     if save_npy:
-        save_filenames = [os.path.join(save_folder, os.path.basename(_fl).replace('.dax', save_postfix +'.npy')) for _fl in filenames]    
+        if seg_prefix is not None:
+            save_filenames = [os.path.basename(_fl).replace('Conv_zscan_', seg_prefix) for _fl in filenames]
+            save_filenames = [re.sub(r'(\d+)', lambda match: str(int(match.group(1))), _fl) for _fl in save_filenames]
+            save_filenames = [os.path.join(save_folder, _fl.replace('.dax', '.npy')) for _fl in save_filenames]
+        else:
+            save_filenames = [os.path.join(save_folder, os.path.basename(_fl).replace('.dax', save_postfix +'.npy')) for _fl in filenames]    
+
     else:
         save_filenames = [os.path.join(save_folder, os.path.basename(_fl).replace('.dax', save_postfix +'.pkl')) for _fl in filenames]
     # decide if directly load
@@ -1380,6 +1387,20 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
             _seg_labels = [np.load(_fl) for _fl in save_filenames]
         else:
             _seg_labels = [pickle.load(open(_fl, 'rb')) for _fl in save_filenames]
+        _new_seg_labels = []
+        for _seg_label in _seg_labels:
+            original_size = _seg_label.shape
+            if len(original_size) == 3:
+                if double_seg_size:
+                    _seg_label = np.array([cv2.resize(_ly, (original_size[1]*2, original_size[2]*2), interpolation = cv2.INTER_NEAREST) for _ly in _seg_label])
+                if return_max_proj_if_3D:
+                    _seg_label = np.max(_seg_label, axis=0)
+            elif len(original_size) == 2:
+                if double_seg_size:
+                    _seg_label = np.array(cv2.resize(_seg_label, (original_size[0]*2, original_size[1]*2), interpolation = cv2.INTER_NEAREST))
+            _new_seg_labels.append(_seg_label)
+        _seg_labels = _new_seg_labels
+            
         # return    
         if return_images:
             if verbose:
@@ -2798,7 +2819,7 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
                            illumination_corr=True, new_dapi_clip=(None, None),
                            change_seg_orientation_to_dapi=False,
                            return_new_dapi=False, skip_correction=False,
-                           verbose=True):
+                           double_size=False, verbose=True):
     """Function to translate segmentation to another given both dapi_images 
     (rotation_matrix may be provided as well)
     Inputs:
@@ -2829,6 +2850,11 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         if verbose:
             print(f"-- loading segmentation from file:{old_segmentation}")
         old_segmentation = np.load(old_segmentation)
+
+    original_size = (old_segmentation.shape[1], old_segmentation.shape[2])
+    if double_size:
+        old_segmentation = np.array([cv2.resize(_ly, (original_size[0]*2, original_size[1]*2), interpolation = cv2.INTER_NEAREST) for _ly in old_segmentation])
+    
     # old_dapi_im
     if not isinstance(old_dapi_im, str) and not isinstance(old_dapi_im, np.ndarray) and not isinstance(old_dapi_im, np.memmap):
         raise TypeError(f"Wrong data type for old_dapi_im:{type(old_dapi_im)}, np.ndarray or np.memmap expected")
@@ -2962,6 +2988,9 @@ def translate_segmentation(old_segmentation, old_dapi_im, new_dapi_im,
         _cell_label = ndimage.binary_dilation(_cell_label, structure=selem3d)
         # save to cleaned labels
         _cleaned_rot_seg_label[_cell_label] = _i+1
+
+    if double_size:
+        _cleaned_rot_seg_label = np.array([cv2.resize(_ly, original_size, interpolation = cv2.INTER_NEAREST) for _ly in _cleaned_rot_seg_label])
     
     if verbose:
         print(f'Segmentation for {old_segmentation} successfully cleaned!')

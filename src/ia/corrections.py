@@ -1933,7 +1933,7 @@ def multi_correct_one_dax(filename, sel_channels=None, crop_limit_list=None,
         _limit_list = []
         for _l in np.unique(seg_label):
             if _l > 0:
-                _limits = visual_tools.Extract_crop_from_segmentation((seg_label==_l), 
+                _limits = visual_tools.Extract_crop_from_segmentation((np.max(seg_label==_l, axis=0)), 
                                                                     extend_dim=extend_dim,
                                                                     single_im_size=single_im_size)
                 _limit_list.append(_limits)

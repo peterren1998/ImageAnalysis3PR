@@ -9,7 +9,6 @@ cmocean==4.0.3
 cooler==0.10.0
 fbpca==1.0
 gdown==5.2.0
-h5py==3.11.0
 hmmlearn==0.3.2
 joblib==1.4.2
 matplotlib==3.9.0
@@ -24,7 +23,6 @@ py3nvml==0.2.7
 pyarrow==17.0.0
 pynndescent==0.5.12
 requests==2.32.3
-scikit-learn==1.5.0
 scipy==1.13.1
 seaborn==0.13.2
 sparse==0.15.4
@@ -34,6 +32,9 @@ typing_extensions==4.12.2
 umap-learn==0.5.6
 # Optional?
 polars==1.4.1
+
+h5py==3.11.0
+scikit-learn==1.5.0
 
 pyfftw
 opencv-python

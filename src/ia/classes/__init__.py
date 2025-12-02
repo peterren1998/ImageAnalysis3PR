@@ -3,6 +3,7 @@ import numpy as np
 import pickle as pickle
 import multiprocessing as mp
 import re
+import cv2
 
 from .. import get_img_info, corrections, visual_tools
 #from ..domain_tools.calling import iterative_domain_calling, basic_domain_calling, local_domain_calling
@@ -495,6 +496,7 @@ class Cell_List():
             num_skipped_channels=self.shared_parameters['num_skipped_channels'],
             make_plot=False, return_images=True, 
             save=_save, save_npy=_save_npy, save_folder=self.segmentation_folder, 
+            double_seg_size=self.shared_parameters['double_seg_size'], return_max_proj_if_3D=True,
             save_postfix=_save_postfix, force=_overwrite, verbose=_verbose)
         ## pick(exclude) cells from previous result
         if _allow_manual:
@@ -805,7 +807,8 @@ class Cell_List():
                         self.shared_parameters['single_im_size'],
                         _old_correction_folder, _new_correction_folder,
                         _fft_gb, _fft_max_disp, illumination_corr, new_dapi_clip,
-                        change_seg_orientation_to_dapi, _return_all, skip_correction, _verbose)
+                        change_seg_orientation_to_dapi, _return_all, skip_correction,
+                        self.shared_parameters['double_seg_size'], _verbose)
                 _seg_args.append(_arg)
                 _seg_fls.append(_new_fl)
             else:
@@ -1022,6 +1025,7 @@ class Cell_List():
                 correction_folder=self.correction_folder, 
                 num_threads=_num_threads, make_plot=_plot_segmentation, return_images=False,
                 save=_save, save_npy=True, save_folder=self.segmentation_folder, 
+                double_seg_size=self.shared_parameters['double_seg_size'], return_max_proj_if_3D=True,
                 save_postfix=_save_postfix, force=False,verbose=_verbose, logger=self.logger)
             # extract result segmentation and image
             _fov_segmentation_label = _fov_segmentation_labels[0]
@@ -1127,7 +1131,7 @@ class Cell_List():
     def _create_cells_fov_nodrift(self, _fov_ids, _num_threads=None, _sequential_mode=False, _plot_segmentation=True, 
                           _load_segmentation=True, _load_exist_info=True, _exclude_attrs=[],
                           _color_filename='Color_Usage', _load_annotated_only=True,
-                          _save=False, _save_postfix='_segmentation', _verbose=True,
+                          _save=False, _save_postfix='_segmentation', seg_prefix=None,_verbose=True,
                           plt_val=False, plt_save=False):
         """Create Cell_data objects for one field of view"""
         settings_msg = f'''
@@ -1142,6 +1146,7 @@ class Cell_List():
         -- load_annotated_only: {_load_annotated_only}
         -- save: {_save}
         -- save_postfix: {_save_postfix}
+        -- seg_prefix: {seg_prefix}
         -- verbose: {_verbose}
         -- plt_val: {plt_val}
         -- plt_save: {plt_save}
@@ -1192,15 +1197,27 @@ class Cell_List():
                 illumination_correction=self.shared_parameters['corr_illumination'],
                 correction_folder=self.correction_folder, 
                 num_threads=_num_threads, make_plot=_plot_segmentation, return_images=False,
-                save=_save, save_npy=True, save_folder=self.segmentation_folder, 
-                save_postfix=_save_postfix, force=False,verbose=_verbose, logger=self.logger)
+                save=_save, save_npy=True, save_folder=self.segmentation_folder,
+                save_postfix=_save_postfix, seg_prefix=seg_prefix,
+                double_seg_size=self.shared_parameters['double_seg_size'], return_max_proj_if_3D=True,
+                force=False, verbose=_verbose, logger=self.logger)
             # extract result segmentation and image
             _fov_segmentation_label = _fov_segmentation_labels[0]
+            # original_size = _fov_segmentation_label.shape
+            # self.log_and_print(f'Loaded or produced {len(_fov_segmentation_labels)} fov segmentations...')
+            # self.log_and_print(f'Segmentation has shape: {_fov_segmentation_label.shape}')
+            # if self.shared_parameters['double_seg_size']:
+            #     _fov_segmentation_label = np.array([cv2.resize(_ly, (original_size[1]*2, original_size[2]*2), interpolation = cv2.INTER_NEAREST) for _ly in _fov_segmentation_label])
+            # self.log_and_print(f'Segmentation has shape (after resize): {_fov_segmentation_label.shape}')
+
             # make plot if necesary
             if _plot_segmentation:
+                # test_zslice = original_size[0]//2
                 plt.figure()
+                # plt.imshow(_fov_segmentation_label[test_zslice])
                 plt.imshow(_fov_segmentation_label)
                 plt.colorbar()
+                # plt.title(f"Segmentation result for fov:{self.fovs[_fov_id]} and zslice:{test_zslice}")
                 plt.title(f"Segmentation result for fov:{self.fovs[_fov_id]}")
                 plt.show()
 
@@ -2776,6 +2793,8 @@ class Cell_Data():
             self.shared_parameters['corr_chromatic'] = True
         if 'allowed_kwds' not in self.shared_parameters:
             self.shared_parameters['allowed_data_types'] = _allowed_kwds
+        if 'double_seg_size' not in self.shared_parameters:
+            self.shared_parameters['double_seg_size'] = False
 
         # load color info
         if not hasattr(self, 'color_dic') or not hasattr(self, 'channels'):
@@ -2916,6 +2935,7 @@ class Cell_Data():
             denoise_window=_denoise_window, shrink_percent=_shrink_percent,
             max_conv_th=_max_conv_th, min_boundary_th=_min_boundary_th,
             make_plot=False, return_images=False, 
+            double_seg_size=self.shared_parameters['double_seg_size'], return_max_proj_if_3D=True,
             save=_save, save_npy=True, save_folder=self.segmentation_folder, force=_force,
             verbose=_verbose
         )
