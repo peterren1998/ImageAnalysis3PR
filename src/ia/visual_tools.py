@@ -1319,7 +1319,7 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
         num_skipped_channels=0,
         save=True, save_folder=None, force=False, 
         save_npy=True, save_postfix="_segmentation", seg_prefix='segmentation_label_',
-        double_seg_size=False, return_max_proj_if_3D=True,
+        double_seg_size=False, return_mode_proj_if_3D=True,
         make_plot=False, return_images=False, verbose=True, logger=None):
     """cell segmentation for DAPI images with pooling and convolution layers
     Inputs:
@@ -1393,7 +1393,8 @@ def DAPI_convoluted_segmentation(filenames, correction_channel=405,
             if len(original_size) == 3:
                 if double_seg_size:
                     _seg_label = np.array([cv2.resize(_ly, (original_size[1]*2, original_size[2]*2), interpolation = cv2.INTER_NEAREST) for _ly in _seg_label])
-                if return_max_proj_if_3D:
+                if return_mode_proj_if_3D:
+                    # _seg_label = scipy.stats.mode(_seg_label, axis=0)
                     _seg_label = np.max(_seg_label, axis=0)
             elif len(original_size) == 2:
                 if double_seg_size:
@@ -1829,6 +1830,7 @@ def crop_cell(im, segmentation_label, drift=None, extend_dim=20, overlap_thresho
     return _crop_ims
 
 # get limitied points of seed within radius of a center
+# NOTE: If you add arguments, you must add them to the end! Other functions rely on the parameters being in a specific order.
 def get_seed_in_distance(im, center=None, num_seeds=0, seed_radius=30,
                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
                          seed_by_per=False, th_seed_percentile=95, 
