@@ -21,6 +21,7 @@ pandas==2.2.2
 psutil==5.9.8
 py3nvml==0.2.7
 pyarrow==17.0.0
+pybedtools==0.10.0
 pynndescent==0.5.12
 requests==2.32.3
 scipy==1.13.1
@@ -33,9 +34,8 @@ umap-learn==0.5.6
 # Optional?
 polars==1.4.1
 
-h5py==3.11.0
-scikit-learn==1.5.0
-
+h5py
+scikit-learn
 pyfftw
 opencv-python
 scikit-image
