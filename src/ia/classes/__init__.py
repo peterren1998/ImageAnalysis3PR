@@ -945,7 +945,7 @@ class Cell_List():
                           _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
                           gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
-                          _dynamic=True, _save=False, _save_postfix='_segmentation', _force_drift=False, _stringent=True, _verbose=True,
+                          _dynamic=True, _save=False, _save_postfix='_segmentation', seg_prefix=None, _force_drift=False, _stringent=True, _verbose=True,
                           spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
         """Create Cell_data objects for one field of view"""
         settings_msg = f'''
@@ -970,6 +970,7 @@ class Cell_List():
         -- dynamic: {_dynamic}
         -- save: {_save}
         -- save_postfix: {_save_postfix}
+        -- seg_prefix: {seg_prefix}
         -- force_drift: {_force_drift}
         -- stringent: {_stringent}
         -- verbose: {_verbose}
@@ -1030,8 +1031,10 @@ class Cell_List():
                 correction_folder=self.correction_folder, 
                 num_threads=_num_threads, make_plot=_plot_segmentation, return_images=False,
                 save=_save, save_npy=True, save_folder=self.segmentation_folder, 
+                save_postfix=_save_postfix, seg_prefix=seg_prefix,
                 double_seg_size=self.shared_parameters['double_seg_size'], return_mode_proj_if_3D=True,
-                save_postfix=_save_postfix, force=False,verbose=_verbose, logger=self.logger)
+                force=False,verbose=_verbose, logger=self.logger)
+            
             # extract result segmentation and image
             _fov_segmentation_label = _fov_segmentation_labels[0]
             # make plot if necesary
@@ -1206,6 +1209,7 @@ class Cell_List():
                 save_postfix=_save_postfix, seg_prefix=seg_prefix,
                 double_seg_size=self.shared_parameters['double_seg_size'], return_mode_proj_if_3D=True,
                 force=False, verbose=_verbose, logger=self.logger)
+            
             # extract result segmentation and image
             _fov_segmentation_label = _fov_segmentation_labels[0]
             # original_size = _fov_segmentation_label.shape
