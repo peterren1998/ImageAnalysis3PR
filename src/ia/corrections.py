@@ -191,6 +191,8 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
         for crop_num, _crop in enumerate(selected_crops):
             if plt_val:
                 plt_save_filename = os.path.join(save_folder, f'fovid{fov_id}_im{os.path.basename(folders[ref_id])}_crop{crop_num}')
+            else:
+                plt_save_filename = None
             log_and_print(f'--- Correcting crop{crop_num} of {_ref_filename} with illumination corr {illumination_corr}:\
 bead_channel: {bead_channel}\
 single_im_size: {single_im_size}\
