@@ -123,7 +123,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                         _correction_folder=_correction_folder, 
                         _match_distance=3, _match_unique=True,
                         _rough_drift_gb=0, _drift_cutoff=1, _verbose=False, logger=None,
-                        spots_save_fileid=None, plt_val=False, return_bottom_n_seeds=None):
+                        spots_save_fileid=None, plt_val=False, return_bottom_n_seeds=None,
+                        sub_background=False):
     """Function to align single pair of bead images
     Inputs:
         _filename: filename for target image containing beads, string of filename
@@ -207,9 +208,9 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
         else:
             _ref_center = np.array(_ref_centers[_i]).copy()
         # rough align ref_im and target_im
-        _rough_drift = fft3d_from2d(_ref_im, _tar_im, gb=_rough_drift_gb)
+        _rough_drift = fft3d_from2d(_ref_im, _tar_im, gb=_rough_drift_gb, sub_background=sub_background)
         log_and_print(f'-- {len(_ref_center)} ref seeds were found in crop {_i} in {_print_name}', logger, verbose=_verbose)
-        log_and_print(f'-- crop {_i}, rough drift between reference and target is {_rough_drift} in {_print_name}', logger, verbose=_verbose)
+        log_and_print(f'-- crop {_i}, rough drift between reference and target is {_rough_drift} in {_print_name} using sub_background {sub_background}', logger, verbose=_verbose)
 
         # based on ref_center and rough_drift, find matched_ref_center
         _matched_tar_seeds, _find_pair = visual_tools.find_matched_seeds(_tar_im, 
@@ -223,7 +224,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                                             search_distance=_match_distance, 
                                                             keep_unique=_match_unique,
                                                             verbose=_verbose, logger=logger,
-                                                            return_bottom_n_seeds=return_bottom_n_seeds)
+                                                            return_bottom_n_seeds=return_bottom_n_seeds,
+                                                            print_name=_print_name)
         print(len(_matched_tar_seeds), _ref_center.shape)
         if len(_matched_tar_seeds) < len(_ref_center) * 0.2:
             _matched_tar_seeds, _find_pair = visual_tools.find_matched_seeds(
@@ -238,7 +240,8 @@ def align_single_image(_filename, _selected_crops, _ref_filename=None, _ref_ims=
                                         search_distance=_match_distance,
                                         keep_unique=_match_unique,
                                         verbose=_verbose, logger=logger,
-                                        return_bottom_n_seeds=return_bottom_n_seeds)
+                                        return_bottom_n_seeds=return_bottom_n_seeds,
+                                        print_name=_print_name)
         #print(len(_matched_tar_seeds), _rough_drift, _print_name)
         log_and_print(f'-- {len(_matched_tar_seeds)} out of {len(_ref_center)} ref seeds were matched in crop {_i} in target {_print_name}', logger, verbose=_verbose)
 
@@ -378,17 +381,58 @@ def fftalign_2d(im1, im2, center=[0, 0], max_disp=150, plt_val=False):
     xt, yt = (-np.floor(np.array(im_cor.shape)/2)+[y, x]).astype(int)
     return xt, yt
 
-def fft3d_from2d(im1, im2, gb=5, max_disp=150):
+def preprocess_for_registration(im2d, bg_sigma=20, eps=1e-6):
+    im = im2d.astype(np.float32)
+
+    # remove offset + smooth background (high-pass)
+    im -= np.median(im)
+    im -= ndimage.gaussian_filter(im, bg_sigma)
+
+    # robust scale (optional but often stabilizes)
+    mad = np.median(np.abs(im - np.median(im))) + eps
+    im /= mad
+    return im
+
+def phasecorr_shift(a, b, eps=1e-8):
+    """
+    Returns (row_shift, col_shift) that best aligns b to a.
+    Positive row_shift means b is shifted DOWN relative to a.
+    """
+    Fa = np.fft.fft2(a)
+    Fb = np.fft.fft2(b)
+    R = Fa * Fb.conj()
+    R /= np.maximum(np.abs(R), eps)
+    r = np.fft.ifft2(R)
+    r = np.abs(r)
+
+    peak = np.unravel_index(np.argmax(r), r.shape)
+    shifts = np.array(peak, dtype=np.int64)
+
+    # convert from FFT index to signed shift
+    for d in (0, 1):
+        n = r.shape[d]
+        if shifts[d] > n // 2:
+            shifts[d] -= n
+    return int(shifts[0]), int(shifts[1])
+
+
+def fft3d_from2d(im1, im2, gb=5, max_disp=150, sub_background=False):
     """Given a refence 3d image <im1> and a target image <im2> 
     this max-projects along the first (z) axis and finds the best tx,ty using fftalign_2d.
     Then it trims and max-projects along the last (y) axis and finds tz.
     Before applying fftalignment we normalize the images using blurnorm2d for stability."""
+
     if gb > 1:
         im1_ = blurnorm2d(np.max(im1, 0), gb)
         im2_ = blurnorm2d(np.max(im2, 0), gb)
     else:
         im1_, im2_ = np.max(im1, 0), np.max(im2, 0)
-    tx, ty = fftalign_2d(im1_, im2_, center=[0, 0], max_disp=max_disp, plt_val=False)
+    if sub_background:
+        im1_ = preprocess_for_registration(im1_)
+        im2_ = preprocess_for_registration(im2_)
+        tx, ty = phasecorr_shift(im1_, im2_)  # tx=row shift, ty=col shift
+    else:
+        tx, ty = fftalign_2d(im1_, im2_, center=[0, 0], max_disp=max_disp, plt_val=False)
     sx, sy = im1_.shape
     if gb > 1:
         im1_t = blurnorm2d(

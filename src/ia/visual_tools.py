@@ -3231,7 +3231,8 @@ def translate_spot_coordinates(source_cell_data, target_cell_data, spots,
 def find_matched_seeds(im, ref_centers, search_distance=3, 
                        gfilt_size=0.75, background_gfilt_size=10, filt_size=3, 
                        dynamic=False, th_seed_percentile=95, th_seed=200, seed_by_per=False,
-                       keep_unique=False, verbose=True, logger=None, return_bottom_n_seeds=None):
+                       keep_unique=False, verbose=True, logger=None, return_bottom_n_seeds=None,
+                       min_num_seeds=1, print_name=None):
     """Find nearby seeds for on given image for given ref_centers
     Inputs:
         im: image, np.ndarray or np.memmap
@@ -3262,7 +3263,12 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
                                   th_seed=th_seed, seed_by_per=seed_by_per,
                                   return_h=True, verbose=verbose,
                                   logger=logger, return_new_thresh=True,
-                                  return_bottom_n_seeds=return_bottom_n_seeds)
+                                  return_bottom_n_seeds=return_bottom_n_seeds,
+                                  min_dynamic_seeds=min_num_seeds,
+                                  hot_pix_th=4)
+    
+    log_and_print(f"- num initial target seeds identified: {_seeds.shape[0]}", logger, verbose=verbose)
+
     ## find seed match
     _matched_seeds = []
     _find_pair = []
@@ -3286,7 +3292,7 @@ def find_matched_seeds(im, ref_centers, search_distance=3,
     # return
     _matched_seeds = np.array(_matched_seeds)
     _find_pair = np.array(_find_pair, dtype=np.bool)
-    log_and_print(f"-- {len(_matched_seeds)} paired seeds are found. ", logger, verbose=verbose)
+    log_and_print(f"-- {len(_matched_seeds)} paired seeds are found for {print_name}.", logger, verbose=verbose)
     return _matched_seeds, _find_pair
 
 # select sparse centers given candidate centers

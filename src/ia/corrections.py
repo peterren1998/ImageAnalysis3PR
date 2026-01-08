@@ -45,7 +45,8 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
                          max_ref_points=500, ref_seed_per=90, drift_cutoff=1,
                          save=True, save_folder=None, save_postfix='_current_cor.pkl',
                          stringent=True, overwrite=False, verbose=True, logger=None,
-                         spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
+                         spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None,
+                         sub_background=False):
     """Function to generate drift profile given a list of corrected bead files
     Inputs:
         folders: hyb-folder names planned for drift-correction, list of folders
@@ -147,6 +148,10 @@ def Calculate_Bead_Drift(folders, fovs, fov_id, num_threads=12, drift_size=500, 
         old_drift_dic = pickle.load(open(_save_filename, 'rb'))
         _exist_keys = [os.path.join(os.path.basename(
             _fd), _fov_name) in old_drift_dic for _fd in folders]
+        if verbose:
+            log_and_print(f'- old_drift_dic.keys(): {list(old_drift_dic.keys())}', logger)
+            log_and_print(f'- old_drift_dic.values(): {list(old_drift_dic.values())}', logger)
+            log_and_print(f'- existing drifts calculated: {sum(_exist_keys)} out of {len(fovs)} fovs', logger)
         if sum(_exist_keys) == len(folders):
             if verbose:
                 log_and_print("-- all frames exists in original drift file, exit.", logger)
@@ -246,7 +251,8 @@ num_skipped_channels: {num_skipped_channels}', logger, verbose=verbose)
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique, 
                              rough_drift_gb, drift_cutoff, verbose, logger,
-                             spots_save_fileid, plt_val, return_bottom_n_seeds))
+                             spots_save_fileid, plt_val, return_bottom_n_seeds,
+                             sub_background))
     
     ## sequential mode
     else:
@@ -270,7 +276,8 @@ num_skipped_channels: {num_skipped_channels}', logger, verbose=verbose)
                              gfilt_size, background_gfilt_size, filt_size,
                              correction_folder, match_distance, match_unique,
                              rough_drift_gb, drift_cutoff, verbose, logger,
-                             spots_save_fileid, plt_val, return_bottom_n_seeds))
+                             spots_save_fileid, plt_val, return_bottom_n_seeds,
+                             sub_background))
 
     ## multiprocessing
     log_and_print(

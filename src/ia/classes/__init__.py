@@ -943,10 +943,11 @@ class Cell_List():
     def _create_cells_fov(self, _fov_ids, _num_threads=None, _sequential_mode=False, _plot_segmentation=True, 
                           _load_segmentation=True, _load_exist_info=True, _exclude_attrs=[],
                           _color_filename='Color_Usage', _load_annotated_only=True, seed_by_per=False, th_seed_per=90,
-                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3,
+                          gfilt_size=0.75, background_gfilt_size=10, filt_size=3, rough_drift_gb=0,
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
                           _dynamic=True, _save=False, _save_postfix='_segmentation', seg_prefix=None, _force_drift=False, _stringent=True, _verbose=True,
-                          spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None):
+                          spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None, match_distance=3, match_unique=True,
+                          sub_background=False, drift_cutoff=1):
         """Create Cell_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
@@ -978,6 +979,10 @@ class Cell_List():
         -- plt_val: {plt_val}
         -- plt_save: {plt_save}
         -- return_bottom_n_seeds: {return_bottom_n_seeds}
+        -- match_distance: {match_distance}
+        -- match_unique: {match_unique}
+        -- sub_background: {sub_background}
+        -- drift_cutoff: {drift_cutoff}
         '''
         if spots_save_fileid is not None:
             # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
@@ -1051,7 +1056,7 @@ class Cell_List():
                 _drift = pickle.load(open(_drift_filename, 'rb'))
                 _exist = [os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) for _fd in _folders \
                         if os.path.join(os.path.basename(_fd),self.fovs[_fov_id]) in _drift]
-                if len(_exist) == len(self.annotated_folders):
+                if len(_exist) == len(self.annotated_folders) or len(_exist) == len(_fov_ids):
                     _direct_load_drift = True
             if not _direct_load_drift:
                 self.log_and_print(f"+ Generate drift correction profile for fov:{self.fovs[_fov_id]}", verbose=_verbose)
@@ -1071,10 +1076,12 @@ class Cell_List():
                                             ref_id=_drift_ref, drift_size=_drift_size, save_folder=self.drift_folder,
                                             save_postfix=_drift_postfix, 
                                             coord_sel=_coord_sel, stringent=_stringent,
-                                            ref_seed_per=th_seed_per,
+                                            ref_seed_per=th_seed_per, rough_drift_gb=rough_drift_gb,
                                             overwrite=_force_drift, verbose=_verbose, logger=self.logger,
                                             spots_save_fileid=spots_save_fileid, plt_val=plt_val, plt_save=plt_save,
-                                            return_bottom_n_seeds=return_bottom_n_seeds)
+                                            return_bottom_n_seeds=return_bottom_n_seeds,
+                                            match_distance=match_distance, match_unique=match_unique,
+                                            sub_background=sub_background, drift_cutoff=drift_cutoff)
 
             # create cells in parallel
             _cell_ids = np.array(np.unique(_fov_segmentation_label[_fov_segmentation_label>0])-1, dtype=np.int32)
