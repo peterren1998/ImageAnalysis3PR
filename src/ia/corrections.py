@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import os, glob 
 import sys, time
 from scipy.stats import scoreatpercentile
+from scipy import ndimage
 import multiprocessing as mp
 import ctypes
 from scipy.ndimage.interpolation import map_coordinates
@@ -2028,3 +2029,19 @@ def multi_correct_one_dax(filename, sel_channels=None, crop_limit_list=None,
         return _cropped_im_list, _drift_limit_list
     else:
         return _cropped_im_list            
+
+def preprocess_image_sub_background(im2d, bg_sigma=20, eps=1e-6, scale=True):
+    im = im2d.astype(np.float32)
+
+    # remove offset + smooth background (high-pass)
+    im -= np.median(im)
+    im -= ndimage.gaussian_filter(im, bg_sigma)
+
+    im = np.clip(im, a_min=0, a_max=None)
+
+    if scale:
+        # robust scale (optional but often stabilizes)
+        mad = np.median(np.abs(im - np.median(im))) + eps
+        im /= mad
+
+    return im

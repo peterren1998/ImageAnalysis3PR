@@ -381,17 +381,6 @@ def fftalign_2d(im1, im2, center=[0, 0], max_disp=150, plt_val=False):
     xt, yt = (-np.floor(np.array(im_cor.shape)/2)+[y, x]).astype(int)
     return xt, yt
 
-def preprocess_for_registration(im2d, bg_sigma=20, eps=1e-6):
-    im = im2d.astype(np.float32)
-
-    # remove offset + smooth background (high-pass)
-    im -= np.median(im)
-    im -= ndimage.gaussian_filter(im, bg_sigma)
-
-    # robust scale (optional but often stabilizes)
-    mad = np.median(np.abs(im - np.median(im))) + eps
-    im /= mad
-    return im
 
 def phasecorr_shift(a, b, eps=1e-8):
     """
@@ -428,8 +417,8 @@ def fft3d_from2d(im1, im2, gb=5, max_disp=150, sub_background=False):
     else:
         im1_, im2_ = np.max(im1, 0), np.max(im2, 0)
     if sub_background:
-        im1_ = preprocess_for_registration(im1_)
-        im2_ = preprocess_for_registration(im2_)
+        im1_ = corrections.preprocess_image_sub_background(im1_)
+        im2_ = corrections.preprocess_image_sub_background(im2_)
         tx, ty = phasecorr_shift(im1_, im2_)  # tx=row shift, ty=col shift
     else:
         tx, ty = fftalign_2d(im1_, im2_, center=[0, 0], max_disp=max_disp, plt_val=False)

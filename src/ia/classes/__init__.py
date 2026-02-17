@@ -84,10 +84,12 @@ def _init_unique_pool(_ic_profile_dic, _cac_profile_dic, _ic_shape, _cac_shape):
     init_dic['cac_shape'] = _cac_shape
 
 def _fit_single_image(_im, _id, _chrom_coords, _seeding_args, _fitting_args, _check_fitting=True, 
-                      _normalization=True, _verbose=False):
+                      _normalization=True, _verbose=False, sub_background=False):
     if _verbose:
         print(f"+++ fitting for region:{_id}")
     _spots_for_chrom = []
+    if sub_background:
+        _im = corrections.preprocess_image_sub_background(_im, scale=False)
     if _normalization:
         _norm_cst = np.nanmedian(_im)
     for _chrom_coord in _chrom_coords:
@@ -722,7 +724,7 @@ class Cell_List():
                                     illumination_corr=True, new_dapi_clip=(None, None),
                                     change_seg_orientation_to_dapi=False,
                                     _save=True, _save_postfix='_segmentation',
-                                    replace_save_prefix_str=None, rna_channels=None,
+                                    replace_save_prefix_str=None, rna_channels=None, dna_channels=None,
                                     _save_npy=True, _return_all=False, _force=False, skip_correction=False, _verbose=True):
         """Function to translate segmenation from a previous experiment 
         given old_segmentation_folder and rotation matrix
@@ -797,6 +799,8 @@ class Cell_List():
                 _new_dapi_im_name = _old_dapi_im_name
             if rna_channels is None:
                 rna_channels = self.channels
+            if dna_channels is None:
+                dna_channels = self.channels
             # translate new segmentation if it doesn't exists or force to generate new ones
             if _force or not os.path.exists(_new_fl):
                 if _verbose:
@@ -804,7 +808,7 @@ class Cell_List():
                 # prepare args for multi-processing
                 _arg = (_old_fl, os.path.join(old_dapi_folder, _old_dapi_im_name), os.path.join(_dapi_fd, _new_dapi_im_name),
                         rotation_mat, None, '405', rna_channels,
-                        self.channels,
+                        dna_channels,
                         self.shared_parameters['num_buffer_frames'], 
                         self.shared_parameters['num_empty_frames'],
                         self.shared_parameters['num_skipped_channels'],
@@ -947,7 +951,7 @@ class Cell_List():
                           _drift_size=500, _drift_ref=0, _drift_postfix='_current_cor.pkl', _coord_sel=None,
                           _dynamic=True, _save=False, _save_postfix='_segmentation', seg_prefix=None, _force_drift=False, _stringent=True, _verbose=True,
                           spots_save_fileid=None, plt_val=False, plt_save=False, return_bottom_n_seeds=None, match_distance=3, match_unique=True,
-                          sub_background=False, drift_cutoff=1):
+                          sub_background=False, drift_cutoff=1, dna_channels=None):
         """Create Cell_data objects for one field of view"""
         settings_msg = f'''
         + Creating Cell_Data objects for fov_ids: {_fov_ids}
@@ -983,6 +987,7 @@ class Cell_List():
         -- match_unique: {match_unique}
         -- sub_background: {sub_background}
         -- drift_cutoff: {drift_cutoff}
+        -- dna_channels: {dna_channels}
         '''
         if spots_save_fileid is not None:
             # assert os.path.dirname(spots_save_fileid) == '', 'spots_save_fileid should not denote a path!'
@@ -991,6 +996,8 @@ class Cell_List():
                 os.makedirs(self.drift_folder)
             self.log_and_print(f'++ saving spot information as {spots_save_fileid}', verbose=_verbose)
         self.log(settings_msg)
+        if dna_channels is None:
+            dna_channels = self.channels
         if not _num_threads:
             _num_threads = int(self.num_threads)
         if isinstance(_fov_ids, int):
@@ -1063,7 +1070,7 @@ class Cell_List():
                 _drift, _failed_count = corrections.Calculate_Bead_Drift(_folders, self.fovs, _fov_id, 
                                             num_threads=_num_threads, sequential_mode=_sequential_mode, 
                                             single_im_size=self.shared_parameters['single_im_size'], 
-                                            all_channels=self.channels,
+                                            all_channels=dna_channels,
                                             num_buffer_frames=self.shared_parameters['num_buffer_frames'], 
                                             num_empty_frames=self.shared_parameters['num_empty_frames'], 
                                             num_skipped_channels=self.shared_parameters['num_skipped_channels'],
@@ -1139,7 +1146,7 @@ class Cell_List():
                 _cell._load_drift(_num_threads=self.num_threads, _size=_drift_size, _ref_id=_drift_ref, 
                                   _drift_postfix=_drift_postfix,_load_annotated_only=_load_annotated_only,
                                   _sequential_mode=_sequential_mode,
-                                  _force=_force_drift, _dynamic=_dynamic, _verbose=_verbose)
+                                  _force=_force_drift, _dynamic=_dynamic, _verbose=_verbose, logger=self.logger)
             if _save:
                 _cell._save_to_file('cell_info', _verbose=_verbose)
 
@@ -1630,7 +1637,8 @@ class Cell_List():
     def _get_chromosomes_for_cells(self, _source='unique', _max_count= 90,
                                    _gaussian_size=2, _cap_percentile=1, _seed_dim=3,
                                    _th_percentile=99.5, _min_obj_size=125,
-                                   _coord_filename='chrom_coords.pkl', _overwrite=False, _verbose=True):
+                                   _coord_filename='chrom_coords.pkl', _overwrite=False, _verbose=True,
+                                   sub_background=False):
         """Function to generate chromosome and chromosome coordinates, open a picker to correct for it
         Inputs:
             _source: image source to generate chromosome image, combo requires "combo_gorups",
@@ -1665,7 +1673,7 @@ class Cell_List():
                 _cim = _cell.chrom_im
             # else create a new chrom_im
             else:
-                _cim = _cell._generate_chromosome_image(_source=_source, _max_count=_max_count, _verbose=_verbose)
+                _cim = _cell._generate_chromosome_image(_source=_source, _max_count=_max_count, _verbose=_verbose, sub_background=sub_background)
                 _cell.chrom_im = _cim
             _chrom_ims.append(_cim)
             _chrom_dims.append(np.array(np.shape(_cim)))
@@ -1679,7 +1687,7 @@ class Cell_List():
             else:
                 _chrom_coords = _cell._identify_chromosomes(_gaussian_size=_gaussian_size, _cap_percentile=_cap_percentile,
                                                             _seed_dim=_seed_dim, _th_percentile=_th_percentile,
-                                                            _min_obj_size=_min_obj_size,_verbose=_verbose)
+                                                            _min_obj_size=_min_obj_size,_verbose=_verbose, sub_background=sub_background)
             # build chrom_coord_dic
             _coord_dic['coords'] += [np.flipud(_coord) for _coord in _chrom_coords]
             _coord_dic['class_ids'] += list(np.ones(len(_chrom_coords),dtype=np.uint16)*int(_i))
@@ -1830,7 +1838,7 @@ class Cell_List():
                                 _max_filt_size=3,
                                 _max_seed_count=6, _min_seed_count=3, _fit_window=40,
                                 _expect_weight=1000, _min_height=100, _max_iter=10, _th_to_end=1e-6,
-                                _save=True, _overwrite=False, _verbose=True):
+                                _save=True, _overwrite=False, _verbose=True, sub_background=False):
         """Function to allow multi-fitting in cell_list"""
         ## Check attributes
         for _cell_id, _cell in enumerate(self.cells):
@@ -1854,7 +1862,8 @@ class Cell_List():
                                                 _max_seed_count=_max_seed_count, _min_seed_count=_min_seed_count, 
                                                 _fit_window=_fit_window, _expect_weight=_expect_weight, 
                                                 _min_height=_min_height, _max_iter=_max_iter,
-                                                _save=_save, _overwrite=_overwrite, _verbose=_verbose)
+                                                _save=_save, _overwrite=_overwrite, _verbose=_verbose,
+                                                sub_background=sub_background)
             if _clear_image_for_cell:
                 if _verbose:
                     print(f"++ clear images for {_data_type} in fov:{_cell.fov_id}, cell:{_cell.cell_id}")
@@ -3044,7 +3053,7 @@ class Cell_Data():
     def _load_drift(self, _sequential_mode=True, _load_annotated_only=True, 
                     _size=500, _ref_id=0, _drift_postfix='_current_cor.pkl', 
                     _num_threads=12, _coord_sel=None, _force=False, _dynamic=True, 
-                    _stringent=True, _verbose=True):
+                    _stringent=True, _verbose=True, logger=None):
         # num-threads
         if hasattr(self, 'num_threads'):
             _num_threads = min(_num_threads, self.num_threads)
@@ -3064,7 +3073,7 @@ class Cell_Data():
                 _folders = self.folders
             # load existing drift file 
             _drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', _drift_postfix))
-            self.log_and_print(f'++ Saving drift file to {_drift_filename}...', verbose=_verbose)
+            log_and_print(f'++ Saving drift file to {_drift_filename}...', logger, verbose=_verbose)
             
             _sequential_drift_filename = os.path.join(self.drift_folder, self.fovs[self.fov_id].replace('.dax', '_sequential'+_drift_postfix))
             # check drift filename and sequential file name:
@@ -3796,7 +3805,7 @@ class Cell_Data():
         pass    
     
     # Generate pooled image representing chromosomes
-    def _generate_chromosome_image(self, _source='unique', _max_count=90, _verbose=False):
+    def _generate_chromosome_image(self, _source='unique', _max_count=90, sub_background=False, _verbose=False):
         """Generate chromosome from existing combo / unique images"""
         _source = _source.lower()
         if _source != 'combo' and _source != 'unique' and _source != 'rna-unique':
@@ -3838,6 +3847,10 @@ class Cell_Data():
         # final correction
         _chrom_im = corrections.Z_Shift_Correction(_chrom_im)
         _chrom_im = corrections.Remove_Hot_Pixels(_chrom_im)
+
+        if sub_background:
+            corrections.preprocess_image_sub_background(_chrom_im, scale=False)
+
         self.chrom_im = _chrom_im
         if _temp_flag: # if temp loaded, release
             if _source == 'combo':
@@ -3848,10 +3861,11 @@ class Cell_Data():
 
     # Identify chromosome(generated by _generate_chromosome_image)
     def _identify_chromosomes(self, _gaussian_size=2, _cap_percentile=1, _seed_dim=3,
-                              _th_percentile=99.5, _min_obj_size=125, _verbose=True):
+                              _th_percentile=99.5, _min_obj_size=125, _verbose=True,
+                               sub_background=False):
         """Function to identify chromsome automatically first"""
         if not hasattr(self, 'chrom_im'):
-            self._generate_chromosome_image()
+            self._generate_chromosome_image(sub_background=sub_background)
         _chrom_im = np.zeros(np.shape(self.chrom_im), dtype=_image_dtype) + self.chrom_im
         if not hasattr(self,'chrom_coords'):
             # gaussian filter
@@ -3992,7 +4006,7 @@ class Cell_Data():
                        _max_seed_count=10, _min_seed_count=3,
                        _fit_radius=5, _fit_window=40, 
                        _expect_weight=1000, _min_height=100, _max_iter=10, _th_to_end=1e-6,
-                       _check_fitting=True, _save=True, _overwrite=False, _verbose=True):
+                       _check_fitting=True, _save=True, _overwrite=False, _verbose=True, sub_background=False):
         """Function for multi-fitting for chromosomes in cell_data"""
         # first check Inputs
         _data_type = _data_type.lower()
@@ -4045,10 +4059,10 @@ class Cell_Data():
                     # merge arguments
             if _use_chrom_coords:
                 _args = [(_im, _id, self.chrom_coords, _seeding_args, _fitting_args, 
-                        _check_fitting, _normalization, _verbose) for _im, _id in zip(_ims, _ids)]
+                        _check_fitting, _normalization, _verbose, sub_background) for _im, _id in zip(_ims, _ids)]
             else:
                 _args = [(_im, _id, [None], _seeding_args, _fitting_args, 
-                        _check_fitting, _normalization, _verbose) for _im, _id in zip(_ims, _ids)]
+                        _check_fitting, _normalization, _verbose, sub_background) for _im, _id in zip(_ims, _ids)]
             # multi-processing for multi-Fitting
             if _verbose:
                 print(f"++ start fitting {_data_type} for fov:{self.fov_id}, cell:{self.cell_id} with {_num_threads} threads")

@@ -945,6 +945,15 @@ def dynamic_pick_spots_for_chromosomes(cell_cand_spots, region_ids,
     optional outputs:
         _sel_ind_list: list of indices for picked spots, list of np.1d-array with ints
     """
+
+    ## make arrays in cell_cand_spots have consistent dimensions (2)
+
+    # for chrom_id in range(len(ref_spot_list)):
+    #     for spot_list in cell_cand_spots:
+    #         cur_chrom_cand_spots = spot_list[chrom_id]
+    #         if cur_chrom_cand_spots.ndim == 1:
+    #             spot_list[chrom_id] = cur_chrom_cand_spots[np.newaxis, :]
+
     from scipy.spatial.distance import cdist
     # merge spots together
     if chrom_coords is not None:
@@ -1013,7 +1022,7 @@ def dynamic_pick_spots_for_chromosomes(cell_cand_spots, region_ids,
             else:
                 ref_id_list.append(np.array(ref_spot_ids, dtype=np.int32))
         else:
-            _chrom_cand_spots = [_spot_list[_chrom_id] for _spot_list in cell_cand_spots]
+            _chrom_cand_spots = [_spot_list[_chrom_id] for _spot_list in cell_cand_spots if _spot_list[_chrom_id].ndim == 2]
             # change for spots
             ref_spot_list[_chrom_id] = np.concatenate(_chrom_cand_spots)
             # change for ids
