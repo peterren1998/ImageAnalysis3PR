@@ -2134,7 +2134,7 @@ def fit_multi_gaussian(im, seeds, width_zxy = [1.5, 2, 2], fit_radius=5,
 
 # slice 3d image
 def slice_image(fl, sizes, zlims, xlims, ylims, zstep=1, zstart=0, empty_frame=1,
-                npy_start=128, image_dtype=np.uint16, verbose=False):
+                npy_start=128, image_dtype=np.uint16, verbose=False, microscope_dict=None):
     """
     Slice image in a memory-efficient manner.
     Inputs:
@@ -2347,6 +2347,157 @@ def slice_image_remove_channel(fl, sizes, zstep, remove_zstarts, empty_frame=1,
     
     return np.array(_kept_layers, dtype=image_dtype)
 
+### Written by ChatGPT 5.2 Thinking
+def slice_image_after_microscope_transform(
+    fl,
+    sizes,
+    zlims,
+    xlims,
+    ylims,
+    microscope_params,
+    *,
+    zstep=1,
+    zstart=0,
+    empty_frame=1,
+    npy_start=128,
+    image_dtype=np.uint16,
+    verbose=False,
+):
+    """
+    Memory-efficient: reads only the raw subvolume needed, then applies the microscope transform,
+    yielding the crop in the *transformed* coordinate system.
+
+    Inputs
+    ------
+    fl, sizes, zlims, zstep, zstart, empty_frame, npy_start, image_dtype, verbose:
+        Same meaning as in slice_image().
+    xlims, ylims:
+        Crop limits in the *transformed image space* (axis1=x, axis2=y after applying microscope_params).
+        Like slice_image, these are [min, max) (max exclusive).
+    microscope_params:
+        Dict used by correct_image3D_by_microscope_param()
+
+    Returns
+    -------
+    Cropped, transformed image stack (or list of stacks if zstart is a list),
+    with shape approximately (dz, dx, dy) where dx=xlims[1]-xlims[0], dy=ylims[1]-ylims[0].
+    """
+
+    # Validate crop limits in transformed space
+    minz_t, maxz_t = np.sort(np.array(zlims, dtype=np.int32))[:2]
+    minx_t, maxx_t = np.sort(np.array(xlims, dtype=np.int32))[:2]
+    miny_t, maxy_t = np.sort(np.array(ylims, dtype=np.int32))[:2]
+    if maxx_t <= minx_t or maxy_t <= miny_t or maxz_t <= minz_t:
+        return np.array([])
+
+    # Raw sizes (z, x, y)
+    sz, sx, sy = np.array(sizes, dtype=np.int32)[:3]
+
+    # What are the full-image sizes after applying transpose?
+    do_transpose = bool(microscope_params.get("transpose", False))
+    do_fh = bool(microscope_params.get("flip_horizontal", False))  # flips axis2 after (optional) transpose
+    do_fv = bool(microscope_params.get("flip_vertical", False))    # flips axis1 after (optional) transpose
+
+    # After transpose, axis1 and axis2 swap
+    # transformed dims: (z, x_t, y_t)
+    if do_transpose:
+        x_t_size = sy
+        y_t_size = sx
+    else:
+        x_t_size = sx
+        y_t_size = sy
+
+    # Helper: map an index in transformed axis -> index in raw axis
+    # (This maps a single coordinate; for cropping we map the two endpoints.)
+    def map_x_t_to_raw(x_t):
+        # Apply flip_vertical on transformed axis1
+        if do_fv:
+            x_t = (x_t_size - 1) - x_t
+        # Undo transpose mapping
+        if do_transpose:
+            # transformed x corresponds to raw y
+            return ("y", x_t)
+        else:
+            # transformed x corresponds to raw x
+            return ("x", x_t)
+
+    def map_y_t_to_raw(y_t):
+        # Apply flip_horizontal on transformed axis2
+        if do_fh:
+            y_t = (y_t_size - 1) - y_t
+        # Undo transpose mapping
+        if do_transpose:
+            # transformed y corresponds to raw x
+            return ("x", y_t)
+        else:
+            # transformed y corresponds to raw y
+            return ("y", y_t)
+
+    # Convert transformed crop [min, max) into raw crop [min, max)
+    # Do it by mapping the first and last included indices:
+    # endpoints in transformed space: min, max-1 (inclusive)
+    x0_kind, x0_raw = map_x_t_to_raw(minx_t)
+    x1_kind, x1_raw = map_x_t_to_raw(maxx_t - 1)
+    y0_kind, y0_raw = map_y_t_to_raw(miny_t)
+    y1_kind, y1_raw = map_y_t_to_raw(maxy_t - 1)
+
+    # We expect one mapping to raw x and one to raw y (possibly swapped due to transpose)
+    # Collect them
+    raw_x_candidates = []
+    raw_y_candidates = []
+
+    for kind, val in [(x0_kind, x0_raw), (x1_kind, x1_raw), (y0_kind, y0_raw), (y1_kind, y1_raw)]:
+        if kind == "x":
+            raw_x_candidates.append(val)
+        elif kind == "y":
+            raw_y_candidates.append(val)
+        else:
+            raise RuntimeError("Unexpected axis kind mapping")
+
+    if len(raw_x_candidates) != 2 or len(raw_y_candidates) != 2:
+        raise RuntimeError(
+            "Mapping error: expected 2 endpoints for raw x and 2 endpoints for raw y. "
+            f"Got raw_x_candidates={raw_x_candidates}, raw_y_candidates={raw_y_candidates}"
+        )
+
+    minx_raw = int(min(raw_x_candidates))
+    maxx_raw = int(max(raw_x_candidates)) + 1  # +1 because max endpoint is inclusive
+    miny_raw = int(min(raw_y_candidates))
+    maxy_raw = int(max(raw_y_candidates)) + 1
+
+    # Clamp to valid raw bounds (helpful if user passes edge values)
+    minx_raw = max(0, minx_raw); maxx_raw = min(sx, maxx_raw)
+    miny_raw = max(0, miny_raw); maxy_raw = min(sy, maxy_raw)
+
+    # Now read ONLY the raw subvolume needed (memory-efficient)
+    raw_crop = slice_image(
+        fl,
+        sizes=sizes,
+        zlims=[minz_t, maxz_t],         # z unaffected by this microscope transform
+        xlims=[minx_raw, maxx_raw],     # raw x crop
+        ylims=[miny_raw, maxy_raw],     # raw y crop
+        zstep=zstep,
+        zstart=zstart,
+        empty_frame=empty_frame,
+        npy_start=npy_start,
+        image_dtype=image_dtype,
+        verbose=verbose,
+        microscope_dict=None,
+    )
+
+    # Apply the transform to the cropped raw data
+    def _transform_one(vol):
+        return correct_image3D_by_microscope_param(vol, microscope_params)
+
+    if isinstance(raw_crop, list):
+        out = [_transform_one(v) for v in raw_crop]
+    else:
+        out = _transform_one(raw_crop)
+
+    # At this point, `out` should already be the correct crop in transformed coordinates.
+    # (i.e. its shape should match (dz, maxx_t-minx_t, maxy_t-miny_t), modulo zstep/zstart behavior)
+    return out
+
 def slice_2d_image(fl, im_shape, xlims, ylims, npy_start=128, image_dtype=np.uint16, verbose=False):
     """Function to slice 2d image directly by avoiding loading in RAM
     Inputs:
@@ -2499,7 +2650,7 @@ def crop_single_image(filename, channel, crop_limits=None, num_buffer_frames=10,
 def crop_multi_channel_image(filename, channels, crop_limits=None, 
                              num_buffer_frames=10, num_empty_frames=1, 
                              all_channels=_allowed_colors, single_im_size=_image_size,
-                             drift=np.array([0, 0, 0]), 
+                             drift=np.array([0, 0, 0]), microscope_dict=None,
                              return_limits=False, verbose=False):
     """Function to crop one image given filename, color_channel and crop_limits
     Inputs:
@@ -2560,9 +2711,14 @@ def crop_multi_channel_image(filename, channels, crop_limits=None,
     _zlims = [num_buffer_frames+_drift_limits[0, 0]*_num_color,
               num_buffer_frames+_drift_limits[0, 1]*_num_color]
     # slice image
-    _crp_ims = slice_image(filename, _full_im_shape, _zlims, _drift_limits[1],
-                           _drift_limits[2], zstep=_num_color, zstart=_channel_ids,
-                           empty_frame=num_empty_frames)
+    if microscope_dict is None:
+        _crp_ims = slice_image(filename, _full_im_shape, _zlims, _drift_limits[1],
+                            _drift_limits[2], zstep=_num_color, zstart=_channel_ids,
+                            empty_frame=num_empty_frames)
+    else:
+        _crp_ims = slice_image_after_microscope_transform(filename, _full_im_shape, _zlims, _drift_limits[1],
+                            _drift_limits[2], microscope_dict, zstep=_num_color, zstart=_channel_ids,
+                            empty_frame=num_empty_frames)
     # do shift if drift exists
     if drift.any():
         _crp_ims = [ndimage.interpolation.shift(_im, -drift, mode='nearest') for _im in _crp_ims]
@@ -3576,3 +3732,17 @@ def auto_limits(img, method="hybrid",
             lo, hi = med - 0.5, med + 0.5
 
     return float(lo), float(hi)
+
+def correct_image3D_by_microscope_param(image3D:np.ndarray, microscope_params:dict):
+    """Correct 3D image with microscopy parameter"""
+    _image = image3D.copy()
+    if not isinstance(microscope_params, dict):
+        raise TypeError(f"Wrong input type for microscope_params, should be a dict")
+    # transpose
+    if 'transpose' in microscope_params and microscope_params['transpose']:
+        _image = _image.transpose((0,2,1))
+    if 'flip_horizontal' in microscope_params and microscope_params['flip_horizontal']:
+        _image = np.flip(_image, 2)
+    if  'flip_vertical' in microscope_params and microscope_params['flip_vertical']:
+        _image = np.flip(_image, 1)
+    return _image

@@ -506,6 +506,7 @@ def correct_fov_image(dax_filename, sel_channels,
     ## summarize and report selected_ims
     _sel_ims = []
     for _ch in sel_channels:
+        print(f'Appending image from channel {_ch}...')
         _sel_ims.append(_ims[_load_channels.index(_ch)].astype(output_dtype).copy())
     # clear
     del(_ims)

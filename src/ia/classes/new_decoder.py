@@ -742,6 +742,26 @@ def batch_process_SpotDecoder(
     if return_obj:
         return _decoder
 
+# def batch_process_SpotDecoder_sequential(
+#     codebook_name,
+#     candSpotDf,
+#     regionPositionsDf,
+#     saveFile,
+#     overwrite=False,
+#     verbose=True,
+#     return_obj=False,
+# ):
+#     # Create class
+#     _decoder = SpotDecoder_sequential(
+#         codebook_name=codebook_name, candSpotDf=candSpotDf,
+#         regionPositionsDf=regionPositionsDf,
+#         saveFile=saveFile,
+#         autoRun=True, preLoad=(not overwrite),
+#         overwrite=overwrite, verbose=verbose,
+#     )
+#     if return_obj:
+#         return _decoder
+
 def batch_process_SpotMapper(        
     codebook_name:str, # library name
     candSpotDf:pd.DataFrame, # candidate spots

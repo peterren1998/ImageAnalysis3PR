@@ -1772,6 +1772,7 @@ def correct_one_dax(filename, sel_channels=None, crop_limits=None, seg_label=Non
                     correction_folder=_correction_folder, normalization=False, 
                     bleed_corr=True, z_shift_corr=True, hot_pixel_remove=True, 
                     illumination_corr=True, chromatic_corr=True,
+                    microscope_dict=None,
                     return_limits=False, verbose=False):
     """wrapper for all correction steps to one image, used for multi-processing
     Inputs:
@@ -1848,13 +1849,19 @@ def correct_one_dax(filename, sel_channels=None, crop_limits=None, seg_label=Non
                                                                        _limits, num_buffer_frames, 
                                                                        num_empty_frames,
                                                                        all_channels, single_im_size,
-                                                                       drift, return_limits=True, 
+                                                                       drift, microscope_dict=microscope_dict,
+                                                                       return_limits=True, 
                                                                        verbose=verbose)
 
 
     # proceed with only selected channels
     _corr_ims = [_im for _im, _ch in zip(
         _corr_ims, correction_channels) if str(_ch) in sel_channels]
+    
+    # # microscope correction
+    # if microscope_dict is not None:
+    #     _corr_ims = [correct_image3D_by_microscope_param(_im, microscope_dict) for _im in _corr_ims]
+
     # do z-shift and hot-pixel correction
     if not bleed_corr:
         # correct for z axis shift
